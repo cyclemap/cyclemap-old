@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -e #exit on failure
+
+base=https://raw.githubusercontent.com/klokantech/tileserver-gl/master/public/resources
+
+for filename in mapbox.css mapbox-gl.css mapbox-gl.js mapbox-gl-rtl-text.js mapbox.js; do
+	wget --output-document=$filename "$base/$filename"
+done
+
+wget --output-document=style.json https://tileserver.cyclemap.us/styles/klokantech-basic-cycle/style.json
+

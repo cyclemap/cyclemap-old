@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>cyclemap - tileserver gl</title>
+	<link rel="stylesheet" type="text/css" href="mapbox-gl.css" />
+	<script src="mapbox-gl.js"></script>
+	<link rel="stylesheet" type="text/css" href="mapbox.css" />
+	<script src="mapbox.js"></script>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+		}
+		#map {
+			position: absolute;
+			top: 0;
+			bottom: 0;
+			width: 100%;
+		}
+		#about {
+			position: absolute;
+			top: 0;
+			height: 20px;
+			padding: 1px;
+			background-color: rgba(255,255,255,.5);
+			z-index: 50;
+			text-size: larger;
+		}
+		#key {
+			position: absolute;
+			bottom: 10px; left: 108px;
+			height: 20px;
+			padding: 1px;
+			background-color: rgba(255,255,255,.5);
+			z-index: 50;
+			text-size: larger;
+		}
+	</style>
+</head>
+<body>
+	<div id='about'>cyclemap - <a href="about.html">about</a></div>
+	<div id='map'>
+	</div>
+	<script>
+		mapboxgl.setRTLTextPlugin('mapbox-gl-rtl-text.js');
+		var map = new mapboxgl.Map({
+			container: 'map',
+			style: 'style.json',
+			center: [-77, 39],
+			zoom: 9,
+			hash: true
+		});
+		map.addControl(new mapboxgl.NavigationControl());
+		map.addControl(new mapboxgl.ScaleControl());
+	</script>
+	<div id='key'>
+		<span style="color: hsla(120, 60%, 30%, 100%); font-weight: bold;">█</span> cycling
+		<span style="color: hsla(30, 60%, 40%, 100%); font-weight: bold;">█</span> unpaved
+		<span style="color: hsla(0, 0%, 94%, 100%); font-weight: bold;">█</span> foot
+	</div>
+</body>
+</html>
