@@ -10,3 +10,4 @@ done
 
 wget --output-document=style.json https://tileserver.cyclemap.us/styles/klokantech-basic-cycle/style.json
 
+wget --output-document=js.cookie.min.js https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js

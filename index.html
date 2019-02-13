@@ -8,6 +8,7 @@
 	<script src="mapbox-gl.js"></script>
 	<link rel="stylesheet" type="text/css" href="mapbox.css" />
 	<script src="mapbox.js"></script>
+	<script src="js.cookie.min.js"></script>
 	<style>
 		body {
 			margin: 0;
@@ -45,11 +46,19 @@
 	</div>
 	<script>
 		mapboxgl.setRTLTextPlugin('mapbox-gl-rtl-text.js');
+		var defaultLatitude = 40;
+		var defaultLongitude = -96;
+		var defaultZoom = 5;
+
+		var latitude = Cookies.get('latitude') || defaultLatitude;
+		var longitude = Cookies.get('longitude') || defaultLongitude;
+		var zoom = Cookies.get('zoom') || defaultZoom;
+
 		var map = new mapboxgl.Map({
 			container: 'map',
 			style: 'style.json',
-			center: [-96, 40],
-			zoom: 5,
+			center: new mapboxgl.LngLat(longitude, latitude),
+			zoom: zoom,
 			hash: true
 		});
 		map.addControl(new mapboxgl.NavigationControl());
@@ -58,6 +67,12 @@
 			positionOptions: {enableHighAccuracy: true},
 			trackUserLocation: true
 		}));
+		map.on('moveend', function(move) {
+			var cookieOptions = { expires: 365 };
+			Cookies.set('latitude', map.getCenter().lat, cookieOptions);
+			Cookies.set('longitude', map.getCenter().lng, cookieOptions);
+			Cookies.set('zoom', map.getZoom(), cookieOptions);
+		});
 	</script>
 	<div id='key'>
 		<span style="color: hsla(120, 60%, 30%, 100%); font-weight: bold;">█</span> cycling
