@@ -2,9 +2,9 @@
 
 set -e #exit on failure
 
-base=https://raw.githubusercontent.com/klokantech/tileserver-gl/master/public/resources
+base=https://cdn.klokantech.com/mapbox-gl-js/v0.53.0
 
-for filename in mapbox.css mapbox-gl.css mapbox-gl.js mapbox-gl-rtl-text.js mapbox.js; do
+for filename in mapbox-gl.css mapbox-gl.js; do
 	wget --output-document=$filename "$base/$filename"
 done
 
