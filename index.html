@@ -12,13 +12,13 @@
 			margin: 0;
 			padding: 0;
 		}
-		#map {
+		.map {
 			position: absolute;
 			top: 0;
 			bottom: 0;
 			width: 100%;
 		}
-		#about {
+		.about {
 			position: absolute;
 			top: 0;
 			height: 20px;
@@ -27,7 +27,7 @@
 			z-index: 50;
 			text-size: larger;
 		}
-		#key {
+		.legend {
 			position: absolute;
 			bottom: 10px; left: 108px;
 			height: 20px;
@@ -36,11 +36,14 @@
 			z-index: 50;
 			text-size: larger;
 		}
+		.legendItem {
+			text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;
+		}
 	</style>
 </head>
 <body>
-	<div id='about'>cyclemap - <a href="about.html">about</a></div>
-	<div id='map'>
+	<div class='about'>cyclemap - <a href="about.html">about</a></div>
+	<div id='map' class='map'>
 	</div>
 	<script>
 		//mapboxgl.setRTLTextPlugin('mapbox-gl-rtl-text.js');
@@ -72,10 +75,10 @@
 			Cookies.set('zoom', map.getZoom(), cookieOptions);
 		});
 	</script>
-	<div id='key'>
-		<span style="color: hsla(120, 60%, 30%, 100%); font-weight: bold;">█</span> cycling
-		<span style="color: hsla(30, 60%, 40%, 100%); font-weight: bold;">█</span> unpaved
-		<span style="color: hsla(0, 0%, 94%, 100%); font-weight: bold;">█</span> foot
+	<div class='legend'>
+		<span style="color: hsla(120, 60%, 30%, 100%);" class="legendItem">█</span> paved?
+		<span style="color: hsla(30, 60%, 40%, 100%);" class="legendItem">█</span> not paved
+		<span style="color: hsla(0, 0%, 94%, 100%);" class="legendItem">█</span> foot
 	</div>
 </body>
 </html>
