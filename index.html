@@ -31,10 +31,19 @@
 			position: absolute;
 			bottom: 10px; left: 108px;
 			height: 20px;
+		}
+		.legendInner {
 			padding: 1px;
 			background-color: rgba(255,255,255,.5);
 			z-index: 50;
 			text-size: larger;
+			transition: opacity 2s;
+		}
+		#highZoomLegend {
+			opacity: 0;
+		}
+		#lowZoomLegend {
+			position: absolute; top: 0; left: 0;
 		}
 		.legendItem {
 			text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;
@@ -45,11 +54,22 @@
 	<div class='about'>cyclemap - <a href="about.html">about</a></div>
 	<div id='map' class='map'>
 	</div>
+	<div class='legend'>
+		<div class='legendInner' id="lowZoomLegend">
+			<span style="color: hsla(120, 60%, 30%, 100%);" class="legendItem">█</span> cycle
+		</div>
+		<div class='legendInner' id="highZoomLegend">
+			<span style="color: hsla(120, 60%, 30%, 100%);" class="legendItem">█</span> paved?
+			<span style="color: hsla(25, 60%, 45%, 100%);" class="legendItem">█</span> not paved
+			<span style="color: hsla(0, 0%, 94%, 100%);" class="legendItem">█</span> foot
+		</div>
+	</div>
 	<script>
 		//mapboxgl.setRTLTextPlugin('mapbox-gl-rtl-text.js');
 		var defaultLatitude = 40;
 		var defaultLongitude = -96;
 		var defaultZoom = 5;
+		var highZoom = 9;
 
 		var latitude = Cookies.get('latitude') || defaultLatitude;
 		var longitude = Cookies.get('longitude') || defaultLongitude;
@@ -74,11 +94,13 @@
 			Cookies.set('longitude', map.getCenter().lng, cookieOptions);
 			Cookies.set('zoom', map.getZoom(), cookieOptions);
 		});
+		map.on('zoom', checkZoom);
+		checkZoom();
+		function checkZoom() {
+			var highZoomEnabled = map.getZoom() >= highZoom;
+			document.getElementById('lowZoomLegend').style.opacity = highZoomEnabled ? 0 : 1;
+			document.getElementById('highZoomLegend').style.opacity = highZoomEnabled ? 1 : 0;
+		}
 	</script>
-	<div class='legend'>
-		<span style="color: hsla(120, 60%, 30%, 100%);" class="legendItem">█</span> paved?
-		<span style="color: hsla(25, 60%, 45%, 100%);" class="legendItem">█</span> not paved
-		<span style="color: hsla(0, 0%, 94%, 100%);" class="legendItem">█</span> foot
-	</div>
 </body>
 </html>
