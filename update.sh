@@ -3,7 +3,7 @@
 set -e #exit on failure
 
 
-base=https://cdn.klokantech.com/mapbox-gl-js/v0.53.0
+base=https://api.mapbox.com/mapbox-gl-js/v1.9.1
 
 for filename in mapbox-gl.css mapbox-gl.js; do
 	wget --output-document=$filename "$base/$filename"
