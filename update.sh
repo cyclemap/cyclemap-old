@@ -15,6 +15,9 @@ base='https://tileserver.cyclemap.us/styles/klokantech-basic-cycle'
 wget --output-document=style.json "$base/style.json"
 
 sed --in-place --expression="s#$base#https://cyclemap.us/sprite#g" style.json
+cp style.json style-normal.json
+cp style.json style-red.json
+cp style.json style-highlight.json
 
 mkdir --parents sprite
 
