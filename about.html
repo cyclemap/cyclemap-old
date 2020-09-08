@@ -19,15 +19,22 @@ body {
 	box-shadow: 2px 2px 4px 4px black inset;
 }
 a:link {text-decoration: none;}
-code {border: 1px solid;}
 </style>
 </head>
 <body>
+<script>
+	//pass any hash location information to osm
+	window.addEventListener('load', (event) => {
+		if(window.location.hash != '') {
+			document.querySelectorAll('.osm-link').forEach((element) => element.href += window.location.hash);
+		}
+	});
+</script>
 <div class="border">
 <p><a href=".">⇐</a></p>
 
 <ul>
-<li>if you notice a problem, please <a href="https://www.openstreetmap.org/">edit osm</a></li>
+<li>if you notice a problem, please <a class="osm-link" href="https://www.openstreetmap.org/">edit osm</a></li>
 <li>"surface" is how we know what is unpaved</li>
 <li>changes to osm take two weeks to propagate</li>
 </ul>
@@ -49,7 +56,7 @@ code {border: 1px solid;}
 <li><a href="https://www.docker.com/">docker</a></li>
 </ul>
 
-<p>if you notice an issue that can't be fixed by <a href="https://www.openstreetmap.org/">editing osm</a>,
+<p>if you notice an issue that can't be fixed by <a class="osm-link" href="https://www.openstreetmap.org/">editing osm</a>,
 please <a href="https://github.com/cyclemap/openmaptiles-cycle/">file a ticket</a>.  if you see a route that SHOULDN'T be a bike route, we want to hear from you: please <a href="https://github.com/cyclemap/openmaptiles-cycle/">file a ticket</a>!</p>
 </div>
 </body>
