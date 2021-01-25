@@ -13,13 +13,13 @@ for filename in mapbox-gl.css mapbox-gl.js; do
 done
 
 
-base='https://tileserver.cyclemap.us/styles/klokantech-basic-cycle'
+base='https://tileserver.cyclemap.us/styles/maptiler-cyclemap'
 
 cp ../../conf/viewer/viewer.tmpl index.html
 sed --in-place \
 	--expression 's#{{public_url}}viewer/##g' \
 	--expression 's#{{public_url}}##g' \
-	--expression 's#styles/klokantech-basic-cycle/##g' \
+	--expression 's#styles/maptiler-cyclemap/##g' \
 	--expression 's#.*tileserver only has this style##' \
 	--expression 's#/sprite@2x#sprite&#' \
 	index.html
