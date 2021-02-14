@@ -2,16 +2,17 @@
 
 set -e #exit on failure
 
-#move from mapbox-gl-js -> maplibre-gl-js
-#https://github.com/maplibre/maplibre-gl-js/projects/1
-#https://github.com/maplibre/maplibre-gl-js/releases/ (nothing here yet)
+maplibreVersion=1.13.0-rc.4
+maplibreUrl=https://registry.npmjs.org/maplibre-gl/-/maplibre-gl-$maplibreVersion.tgz
 
-base=https://api.mapbox.com/mapbox-gl-js/v1.13.0
-
-for filename in mapbox-gl.css mapbox-gl.js; do
-	wget --output-document=$filename "$base/$filename"
-done
-
+curl \
+	--silent \
+	"$maplibreUrl" |
+tar \
+	--extract \
+	--gzip \
+	--strip-components 2 \
+	package/dist/{mapbox-gl.css,mapbox-gl.js}
 
 base='https://tileserver.cyclemap.us/styles/maptiler-cyclemap'
 
