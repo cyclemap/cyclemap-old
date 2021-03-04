@@ -5,6 +5,10 @@ set -e #exit on failure
 maplibreVersion=1.13.0-rc.4
 maplibreUrl=https://registry.npmjs.org/maplibre-gl/-/maplibre-gl-$maplibreVersion.tgz
 
+if [ -e 'tokens.conf' ]; then
+	source 'tokens.conf'
+fi
+
 curl \
 	--silent \
 	"$maplibreUrl" |
@@ -16,13 +20,15 @@ tar \
 
 base='https://tileserver.cyclemap.us/styles/maptiler-cyclemap'
 
-cp ../../conf/viewer/viewer.tmpl index.html
+cp --dereference viewer.tmpl index.html
 sed --in-place \
 	--expression 's#{{public_url}}viewer/##g' \
 	--expression 's#{{public_url}}##g' \
 	--expression 's#styles/maptiler-cyclemap/##g' \
 	--expression 's#.*tileserver only has this style##' \
 	--expression 's#/sprite@2x#sprite&#' \
+	--expression "s/mapboxgl.accessToken = null/mapboxgl.accessToken = '$mapboxAccessToken'/" \
+	--expression "s/openrouteAccessToken = null/openrouteAccessToken = '$openrouteAccessToken'/" \
 	index.html
 
 wget --output-document=style.json "$base/style.json"
