@@ -4,8 +4,8 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>cyclemap</title>
-	<link rel="stylesheet" type="text/css" href="mapbox-gl.css" />
-	<script src="mapbox-gl.js"></script>
+	<link rel="stylesheet" type="text/css" href="maplibre-gl.css" />
+	<script src="maplibre-gl.js"></script>
 	<script src="js.cookie.min.js"></script>
 	<style>
 		body {
@@ -101,7 +101,7 @@
 	</div>
 	<script>
 
-mapboxgl.accessToken = 'pk.eyJ1IjoiY3ljbGVtYXB1cyIsImEiOiJjanNhbHRlaGMwMGp2NDNqeG80Mzk2cmExIn0.0OBPtvf3KANeaA6QOCk1yw';
+maplibregl.accessToken = 'pk.eyJ1IjoiY3ljbGVtYXB1cyIsImEiOiJjanNhbHRlaGMwMGp2NDNqeG80Mzk2cmExIn0.0OBPtvf3KANeaA6QOCk1yw';
 openrouteAccessToken = '5b3ce3597851110001cf6248ba1b7964630a48d9841d1336bd6686c7';
 
 var highZoom = 12;
@@ -133,7 +133,7 @@ function setupLayers() {
 	var layerPicker = document.getElementById('layerPicker');
 	var layerControls = layerPicker.getElementsByTagName('button');
 
-	if(mapboxgl.accessToken == null) {
+	if(maplibregl.accessToken == null) {
 		Array.prototype.forEach.call(layerControls, (input) => input.style.visibility = 'hidden');
 	}
 
@@ -150,7 +150,7 @@ function setupLayers() {
 }
 
 function setupMap() {
-	//mapboxgl.setRTLTextPlugin('mapbox-gl-rtl-text.js');
+	//maplibregl.setRTLTextPlugin('mapbox-gl-rtl-text.js');
 	var defaultLatitude = 40;
 	var defaultLongitude = -96;
 	var defaultZoom = 5;
@@ -161,17 +161,17 @@ function setupMap() {
 
 	var style = getStyle();
 
-	var map = new mapboxgl.Map({
+	var map = new maplibregl.Map({
 		container: 'map',
 		style: style,
-		center: new mapboxgl.LngLat(longitude, latitude),
+		center: new maplibregl.LngLat(longitude, latitude),
 		zoom: zoom,
 		hash: true,
 		dragRotate: false
 	});
-	map.addControl(new mapboxgl.NavigationControl());
-	map.addControl(new mapboxgl.ScaleControl());
-	map.addControl(new mapboxgl.GeolocateControl({
+	map.addControl(new maplibregl.NavigationControl());
+	map.addControl(new maplibregl.ScaleControl());
+	map.addControl(new maplibregl.GeolocateControl({
 		positionOptions: {enableHighAccuracy: true},
 		trackUserLocation: true
 	}));
@@ -248,9 +248,9 @@ function addGeoJsonLayer(id, type, data) {
 
 	/*
 	geojson.features.forEach(function (marker) {
-		new mapboxgl.Marker()
+		new maplibregl.Marker()
 			.setLngLat(marker.geometry.coordinates)
-			.setPopup(new mapboxgl.Popup({ offset: 25 })
+			.setPopup(new maplibregl.Popup({ offset: 25 })
 			.setHTML('<h3>' + marker.properties.title + '</h3><p>' + marker.properties.description + '</p>'))
 			.addTo(map);
 	});
