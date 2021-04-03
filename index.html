@@ -107,17 +107,19 @@ openrouteAccessToken = '5b3ce3597851110001cf6248ba1b7964630a48d9841d1336bd6686c7
 var highZoom = 12;
 
 var query = new URLSearchParams(window.location.search);
-var cookieOptions = { expires: 365 };
+var cookieOptions = { expires: 182 };
 
 var map = setupMap();
 setupLayers();
 addMoveListener();
+addClickListeners();
 checkAddGeoJsonLayer();
+checkAddLayers();
 
 function getStyle() {
 	var styleRoot = '';
 	var defaultStyle = Cookies.get('style') != null ? Cookies.get('style') : 'style.json';
-	var style = query.has('style') ? 'style-' + query.get('style') + '.json' : defaultStyle;
+	var style = query.has('style') ? `style-${query.get('style')}.json` : defaultStyle;
 
 	
 	if(style != 'style.json') {
@@ -202,40 +204,63 @@ function addMoveListener() {
 	}
 }
 
+function addClickListeners() {
+	map.on("mouseup", e => {
+		var event = e.originalEvent;
+		
+		if(event.button === 2) {
+			//right click
+			var point = e.lngLat;
+			alert(`${point.lat.toFixed(4)},${e.lngLat.lng.toFixed(4)} ${point.lng.toFixed(4)},${e.lngLat.lat.toFixed(4)}`);
+		}
+	});
+	if(openrouteAccessToken !== null) {
+		map.on("click", e => {
+			var event = e.originalEvent;
+			
+			if(event.button === 0) {
+				//left click
+				addRoutePoint(e.lngLat);
+			}
+		});
+	}
+}
+
+
 var startPoint = null;
 
-function pointToString(point) {return point.lng.toFixed(6) + ',' + point.lat.toFixed(6);}
+function pointToString(point) {return `${point.lng.toFixed(6)},${point.lat.toFixed(6)}`;}
 	
 function addRoutePoint(point) {
 	if(startPoint === null) {
 		startPoint = point;
 		var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: 'startPoint'} };
-		addGeoJsonLayer('startPoint', 'symbol', pointFeature);
+		addLayer('startPoint', 'symbol', pointFeature);
 		return;
 	}
 
 	var endPoint = point;
 	var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: 'endPoint'} };
-	addGeoJsonLayer('endPoint', 'symbol', pointFeature);
+	addLayer('endPoint', 'symbol', pointFeature);
 
 	var url = `https://api.openrouteservice.org/v2/directions/cycling-regular?api_key=${openrouteAccessToken}&start=${pointToString(startPoint)}&end=${pointToString(endPoint)}`;
 
 	ajaxGet(url, (data) => {
 		//sending in url directly here doesn't work because of somesuch header (Accept: application/json) made the server mad
-		addGeoJsonLayer('route', 'line', data);
+		addLayer('route', 'line', data);
 	});
 	
 	startPoint = null;
 }
 
-function addGeoJsonLayer(id, type, data) {
+function addLayer(id, type, data) {
 	if(map.getSource(id) != null) {
 		map.getSource(id).setData(data);
 		return;
 	}
 	
 	map.addSource(id, {
-		type: 'geojson',
+		type: type == 'vector' ? 'vector' : 'geojson',
 		data: data,
 		attribution: 'external resource loaded'
 	});
@@ -251,7 +276,7 @@ function addGeoJsonLayer(id, type, data) {
 		new maplibregl.Marker()
 			.setLngLat(marker.geometry.coordinates)
 			.setPopup(new maplibregl.Popup({ offset: 25 })
-			.setHTML('<h3>' + marker.properties.title + '</h3><p>' + marker.properties.description + '</p>'))
+			.setHTML(`<h3>${marker.properties.title}</h3><p>${marker.properties.description}</p>`))
 			.addTo(map);
 	});
 	*/
@@ -259,27 +284,32 @@ function addGeoJsonLayer(id, type, data) {
 
 function checkAddGeoJsonLayer() {
 	var geoJsonData = query.get('geo'), type = query.get('type') != null ? query.get('type') : 'symbol';
-	if(geoJsonData !== null) {
-		map.on('load', function() {addGeoJsonLayer('geoJsonData', type, geoJsonData);});
+	if(geoJsonData === null) {
+		return;
 	}
-	map.on("mouseup", e => {
-		var event = e.originalEvent;
-		
-		if(event.button === 2) {
-			//right click
-			alert(e.lngLat.lat.toFixed(4) + "," + e.lngLat.lng.toFixed(4));
-		}
-	});
-	if(openrouteAccessToken !== null) {
-		map.on("click", e => {
-			var event = e.originalEvent;
-			
-			if(event.button === 0) {
-				//left click
-				addRoutePoint(e.lngLat);
+	map.on('style.load', function() {addLayer('geoJsonData', type, geoJsonData);});
+}
+
+function checkAddLayers() {
+	//i tried really hard to find a standard way of doing this.  addSource requires vector layers to be tiled?  map.setStyle only allows one style?
+	var layers = query.get('layers');
+	if(layers === null) {
+		return;
+	}
+	ajaxGet(layers, (data) => {
+		map.on('style.load', function() {
+			var sources = data['sources'];
+			for(var id in sources) {
+				map.addSource(id, sources[id]);
+			}
+			for(var layer of data['layers']) {
+				map.addLayer({
+					...layer,
+					...getOptions(layer['type']),
+				});
 			}
 		});
-	}
+	});
 }
 
 function ajaxGet(url, callback) {
