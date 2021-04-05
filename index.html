@@ -177,7 +177,6 @@ function setupMap() {
 		positionOptions: {enableHighAccuracy: true},
 		trackUserLocation: true
 	}));
-	map.on("contextmenu", e => {});
 	return map;
 }
 
@@ -205,25 +204,49 @@ function addMoveListener() {
 }
 
 function addClickListeners() {
-	map.on("mouseup", e => {
-		var event = e.originalEvent;
-		
-		if(event.button === 2) {
-			//right click
-			var point = e.lngLat;
-			alert(`${point.lat.toFixed(4)},${e.lngLat.lng.toFixed(4)} ${point.lng.toFixed(4)},${e.lngLat.lat.toFixed(4)}`);
+	map.on("contextmenu", fireLongpress);
+	addLongPressListener();
+}
+
+
+/**
+ * long press implementation here is fairly manual
+ */
+function addLongPressListener() {
+	let longPressTimeout = null;
+	let clearLongPressTimeout = () => clearTimeout(longPressTimeout);
+
+	map.on('touchstart', (e) => {
+		if(e.originalEvent.touches.length > 1) {
+			return;
+		}
+		else {
+			longPressTimeout = setTimeout(() => {
+				window.navigator.vibrate(100);
+				setTimeout(() => fireLongpress(e), 1);
+			}, 500);
 		}
 	});
-	if(openrouteAccessToken !== null) {
-		map.on("click", e => {
-			var event = e.originalEvent;
-			
-			if(event.button === 0) {
-				//left click
-				addRoutePoint(e.lngLat);
-			}
-		});
+	map.on('touchend', clearLongPressTimeout);
+	map.on('touchcancel', clearLongPressTimeout);
+	map.on('touchmove', clearLongPressTimeout);
+	map.on('pointerdrag', clearLongPressTimeout);
+	map.on('pointermove', clearLongPressTimeout);
+	map.on('moveend', clearLongPressTimeout);
+	map.on('gesturestart', clearLongPressTimeout);
+	map.on('gesturechange', clearLongPressTimeout);
+	map.on('gestureend', clearLongPressTimeout);
+}
+
+function fireLongpress(e) {
+	if(openrouteAccessToken === null) {
+		return;
 	}
+	var event = e.originalEvent;
+	
+	addRoutePoint(e.lngLat);
+	var point = e.lngLat;
+	alert(`${point.lat.toFixed(4)},${e.lngLat.lng.toFixed(4)} ${point.lng.toFixed(4)},${e.lngLat.lat.toFixed(4)}`);
 }
 
 
@@ -235,51 +258,26 @@ function addRoutePoint(point) {
 	if(startPoint === null) {
 		startPoint = point;
 		var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: 'startPoint'} };
-		addLayer('startPoint', 'symbol', pointFeature);
+		addLayerHelper('startPoint', 'symbol', pointFeature);
 		return;
 	}
 
 	var endPoint = point;
 	var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: 'endPoint'} };
-	addLayer('endPoint', 'symbol', pointFeature);
+	addLayerHelper('endPoint', 'symbol', pointFeature);
 
 	var url = `https://api.openrouteservice.org/v2/directions/cycling-regular?api_key=${openrouteAccessToken}&start=${pointToString(startPoint)}&end=${pointToString(endPoint)}`;
 
 	ajaxGet(url, (data) => {
 		//sending in url directly here doesn't work because of somesuch header (Accept: application/json) made the server mad
-		addLayer('route', 'line', data);
+		addLayerHelper('route', 'line', data);
 	});
 	
 	startPoint = null;
 }
 
-function addLayer(id, type, data) {
-	if(map.getSource(id) != null) {
-		map.getSource(id).setData(data);
-		return;
-	}
-	
-	map.addSource(id, {
-		type: type == 'vector' ? 'vector' : 'geojson',
-		data: data,
-		attribution: 'external resource loaded'
-	});
-	map.addLayer({
-		'id': id,
-		'type': type,
-		'source': id,
-		...getOptions(type),
-	});
-
-	/*
-	geojson.features.forEach(function (marker) {
-		new maplibregl.Marker()
-			.setLngLat(marker.geometry.coordinates)
-			.setPopup(new maplibregl.Popup({ offset: 25 })
-			.setHTML(`<h3>${marker.properties.title}</h3><p>${marker.properties.description}</p>`))
-			.addTo(map);
-	});
-	*/
+function addLayerHelper(id, type, data) {
+	addLayers({"sources": {[id]: {"type": "geojson", "data": data}}, "layers": [{"id": id, "type": type, "source": id}]});
 }
 
 function checkAddGeoJsonLayer() {
@@ -287,7 +285,43 @@ function checkAddGeoJsonLayer() {
 	if(geoJsonData === null) {
 		return;
 	}
-	map.on('style.load', function() {addLayer('geoJsonData', type, geoJsonData);});
+	map.on('style.load', () => addLayerHelper('geoJsonData', type, geoJsonData));
+}
+
+function addLayers(data) {
+	var sources = data['sources'];
+	for(var id in sources) {
+		var source = sources[id];
+		if(map.getSource(id) == null) {
+			map.addSource(id, source);
+		}
+		else {
+			map.getSource(id).setData(source['data']);
+		}
+	}
+	for(var layer of data['layers']) {
+		if(map.getLayer(layer['id']) != null) {
+			continue;
+		}
+		map.addLayer({
+			...getOptions(layer['type']),
+			...layer,
+		}, layer['beforeId']);
+		if(layer['type'] === 'symbol') {
+			map.on('click', layer['id'], function(e) {
+				if(e.features[0].properties.description == null) {
+					return;
+				}
+				var coordinates = e.features[0].geometry.coordinates;
+				var description = e.features[0].properties.description;
+
+				new maplibregl.Popup()
+					.setLngLat(coordinates)
+					.setHTML(description)
+					.addTo(map);
+			});
+		}
+	}
 }
 
 function checkAddLayers() {
@@ -297,18 +331,7 @@ function checkAddLayers() {
 		return;
 	}
 	ajaxGet(layers, (data) => {
-		map.on('style.load', function() {
-			var sources = data['sources'];
-			for(var id in sources) {
-				map.addSource(id, sources[id]);
-			}
-			for(var layer of data['layers']) {
-				map.addLayer({
-					...getOptions(layer['type']),
-					...layer,
-				}, layer['beforeId']);
-			}
-		});
+		map.on('style.load', () => addLayers(data));
 	});
 }
 
