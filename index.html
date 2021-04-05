@@ -304,9 +304,9 @@ function checkAddLayers() {
 			}
 			for(var layer of data['layers']) {
 				map.addLayer({
-					...layer,
 					...getOptions(layer['type']),
-				});
+					...layer,
+				}, layer['beforeId']);
 			}
 		});
 	});
