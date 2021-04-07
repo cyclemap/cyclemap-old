@@ -257,20 +257,22 @@ function pointToString(point) {return `${point.lng.toFixed(6)},${point.lat.toFix
 function addRoutePoint(point) {
 	if(startPoint === null) {
 		startPoint = point;
-		var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: 'startPoint'} };
+		var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: 'start'} };
 		addLayerHelper('startPoint', 'symbol', pointFeature);
 		return;
 	}
 
 	var endPoint = point;
-	var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: 'endPoint'} };
-	addLayerHelper('endPoint', 'symbol', pointFeature);
 
 	var url = `https://api.openrouteservice.org/v2/directions/cycling-regular?api_key=${openrouteAccessToken}&start=${pointToString(startPoint)}&end=${pointToString(endPoint)}`;
 
 	ajaxGet(url, (data) => {
 		//sending in url directly here doesn't work because of somesuch header (Accept: application/json) made the server mad
 		addLayerHelper('route', 'line', data);
+		var duration = data.features[0].properties.summary.duration;
+		duration /= 3600;
+		var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: `end ${duration.toFixed(1)}h`} };
+		addLayerHelper('endPoint', 'symbol', pointFeature);
 	});
 	
 	startPoint = null;
