@@ -68,10 +68,10 @@
 			vertical-align: middle;
 			transform: scale(.75);
 		}
-		#layerPicker button {
+		.picker button {
 			font-size: 10px;
 		}
-		#layerPicker button.active {
+		.picker button.active {
 			background-color: #48b;
 			color: #fff;
 		}
@@ -79,9 +79,11 @@
 </head>
 <body>
 	<div class="about">cyclemap - <a class="about-link" href="about.html">about</a></div>
-	<nav id="layerPicker" class="">
-		<button id="cyclemap" href="#" class="mapboxgl-ctrl mapboxgl-ctrl-group active">cyc</button>
-		<button id="satellite" href="#" class="mapboxgl-ctrl mapboxgl-ctrl-group">sat</button>
+	<nav id="backgroundPicker" class="picker">
+		<button id="cyclemap" class="mapboxgl-ctrl mapboxgl-ctrl-group active">cyc</button>
+		<button id="satellite" class="mapboxgl-ctrl mapboxgl-ctrl-group">sat</button>
+	</nav>
+	<nav id="layerPicker" class="picker">
 	</nav>
 	<div id="map" class="map">
 	</div>
@@ -110,11 +112,11 @@ var query = new URLSearchParams(window.location.search);
 var cookieOptions = { expires: 182 };
 
 var map = setupMap();
-setupLayers();
 addMoveListener();
 addClickListeners();
 checkAddGeoJsonLayer();
 checkAddLayers();
+setupLayers();
 
 function getStyle() {
 	var styleRoot = '';
@@ -130,10 +132,12 @@ function getStyle() {
 }
 
 function setupLayers() {
-	document.getElementsByClassName('mapboxgl-ctrl-top-right')[0].append(document.getElementById('layerPicker'));
+	var destination = document.getElementsByClassName('mapboxgl-ctrl-top-right')[0];
+	destination.append(document.getElementById('backgroundPicker'))
+	destination.append(document.getElementById('layerPicker'));
 
-	var layerPicker = document.getElementById('layerPicker');
-	var layerControls = layerPicker.getElementsByTagName('button');
+	var backgroundPicker = document.getElementById('backgroundPicker');
+	var layerControls = backgroundPicker.getElementsByTagName('button');
 
 	if(maplibregl.accessToken == null) {
 		Array.prototype.forEach.call(layerControls, (input) => input.style.visibility = 'hidden');
@@ -302,15 +306,22 @@ function addLayers(data) {
 		}
 	}
 	for(var layer of data['layers']) {
-		if(map.getLayer(layer['id']) != null) {
+		var id = layer['id'];
+		if(map.getLayer(id) != null) {
 			continue;
 		}
 		map.addLayer({
 			...getOptions(layer['type']),
 			...layer,
 		}, layer['beforeId']);
+		
+		addLayerButton(layer);
+
+		var active = document.getElementById(id).classList.contains("active")
+		map.setLayoutProperty(id, 'visibility', active ? 'visible' : 'none');
+
 		if(layer['type'] === 'symbol') {
-			map.on('click', layer['id'], function(e) {
+			map.on('click', id, function(e) {
 				if(e.features[0].properties.description == null) {
 					return;
 				}
@@ -324,6 +335,32 @@ function addLayers(data) {
 			});
 		}
 	}
+}
+
+function addLayerButton(layer) {
+	var layerPicker = document.getElementById('layerPicker');
+	var button = document.createElement('button');
+	var classList = button.classList;
+	var id = layer['id'];
+
+	if(document.getElementById(id) != null) {
+		return;
+	}
+
+	button.setAttribute('id', id);
+	button.setAttribute('class', 'mapboxgl-ctrl mapboxgl-ctrl-group active');
+	button.appendChild(document.createTextNode(id.substr(0, 3)));
+	button.onclick = (e) => {
+		var active = !classList.contains("active");
+		map.setLayoutProperty(id, 'visibility', active ? 'visible' : 'none');
+		if(active) {
+			classList.add("active");
+		}
+		else {
+			classList.remove("active");
+		}
+	};
+	layerPicker.appendChild(button);
 }
 
 function checkAddLayers() {
