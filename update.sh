@@ -20,7 +20,7 @@ wget --output-document=style.json "$base/style.json"
 
 sed --in-place --expression="s#$base#https://cyclemap.us/sprite#g" style.json
 cp style.json style-normal.json
-sed --expression='s/hsl(25, 60%, 45%)/red/2' --expression 's/,\["==","true","false"\]//' style.json >style-red.json
+sed --expression='s/hsl(25, 60%, 45%)/red/2' style.json >style-red.json
 sed --expression='s/hsl(120, 60%, 30%)/white/g' --expression='s/hsl(25, 60%, 45%)/white/1' --expression='s/hsl(25, 60%, 45%)/red/' style.json >style-highlight.json
 
 mkdir --parents sprite
