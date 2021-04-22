@@ -1,11 +1,11 @@
-* see [about.html](https://cyclemap.us/about.html) for info on technologies used and licensing
+* see about link for info on technologies used and licensing
 * see [my edits to openmaptiles](https://github.com/cyclemap/openmaptiles-cycle/)
 
 ## setup
 
 * `./update.sh`
 
-## license
+## license for client-side
 
 * [this license](LICENSE.md)
 * [maplibre](https://github.com/maplibre/maplibre-gl-js/blob/main/LICENSE.txt)
