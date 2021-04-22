@@ -7,6 +7,8 @@
 	<link rel="stylesheet" type="text/css" href="maplibre-gl.css" />
 	<script src="maplibre-gl.js"></script>
 	<script src="js.cookie.min.js"></script>
+	<script src='pelias-geocoder.js'></script>
+	<link rel='stylesheet' href='pelias-geocoder.css' type='text/css'/>
 	<style>
 		body {
 			margin: 0;
@@ -255,6 +257,17 @@ function setupMap() {
 	map.addControl(new maplibregl.GeolocateControl({
 		positionOptions: {enableHighAccuracy: true},
 		trackUserLocation: true
+	}));
+	map.addControl(new PeliasGeocoder({
+		params: {
+			'api_key': openrouteAccessToken,
+			'boundary.country': 'us,ca,mx',
+		},
+		marker: {icon: 'marker_11', anchor: 'bottom'},
+		flyTo: 'hybrid',
+		removeDuplicates: true,
+		url: 'https://api.openrouteservice.org/geocode',
+		useFocusPoint: true
 	}));
 	return map;
 }
