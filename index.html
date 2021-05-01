@@ -356,10 +356,15 @@ function addRoutePoint(point) {
 
 	ajaxGet(url, (data) => {
 		//sending in url directly here doesn't work because of somesuch header (Accept: application/json) made the server mad
+		if(data.error !== undefined) {
+			alert(data.error.message);
+			return;
+		}
 		addLayerHelper('route', 'line', data);
-		var duration = data.features[0].properties.summary.duration;
-		duration /= 3600;
-		var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: `end ${duration.toFixed(1)}h`} };
+		var summary = data.features[0].properties.summary;
+		var duration = (summary.duration / 3600).toFixed(1);
+		var distance = (summary.distance / 1000).toFixed(0);
+		var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: `end ${duration}h\n${distance}km`} };
 		addLayerHelper('endPoint', 'symbol', pointFeature);
 	});
 	
