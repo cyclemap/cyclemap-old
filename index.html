@@ -432,16 +432,19 @@ function addLayerButton(layer) {
 	}
 
 	button.setAttribute('id', id);
-	button.setAttribute('class', 'mapboxgl-ctrl mapboxgl-ctrl-group active');
+	button.setAttribute('class', 'mapboxgl-ctrl mapboxgl-ctrl-group');
+	if(layer['active'] === undefined || layer['active'] === true) {
+		classList.add('active');
+	}
 	button.appendChild(document.createTextNode(id.substr(0, 3)));
 	button.onclick = (e) => {
-		var active = !classList.contains("active");
+		var active = !classList.contains('active');
 		map.setLayoutProperty(id, 'visibility', active ? 'visible' : 'none');
 		if(active) {
-			classList.add("active");
+			classList.add('active');
 		}
 		else {
-			classList.remove("active");
+			classList.remove('active');
 		}
 	};
 	layerPicker.appendChild(button);
