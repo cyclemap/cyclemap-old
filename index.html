@@ -112,6 +112,10 @@
 			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
 			window.open(`https://www.openstreetmap.org/edit#map=${(zoom+1).toFixed(0)}/${latitude.toFixed(5)}/${longitude.toFixed(5)}`);
 		">osm</button>
+		<button id="osm-edit" class="mapboxgl-ctrl mapboxgl-ctrl-group" onclick="
+			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
+			window.open(`https://www.google.com/maps/@${latitude.toFixed(5)},${longitude.toFixed(5)},${(zoom+1).toFixed(0)}z`);
+		">g</button>
 	</div>
 	<nav id="backgroundPicker" class="picker">
 		<button id="cyclemap" class="mapboxgl-ctrl mapboxgl-ctrl-group active">cyc</button>
