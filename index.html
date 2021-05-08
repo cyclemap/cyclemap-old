@@ -201,15 +201,26 @@ setupLayers();
 
 function getStyle() {
 	var styleRoot = '';
-	var defaultStyle = Cookies.get('style') != null ? Cookies.get('style') : 'style.json';
-	var style = query.has('style') ? `style-${query.get('style')}.json` : defaultStyle;
+	var cookieStyle = Cookies.get('style') || null;
+	var style = query.has('style') ? `style-${query.get('style')}.json` : cookieStyle;
 
 	
-	if(style != 'style.json') {
+	if(style != null) {
 		Cookies.set('style', style, cookieOptions);
 	}
 
-	return styleRoot + style;
+	return styleRoot + (style != null ? style : 'style.json');
+}
+
+function getLayers() {
+	var cookieLayers = Cookies.get('layers') || null;
+	var layers = query.has('layers') ? query.get('layers') : cookieLayers;
+	
+	if(layers != null) {
+		Cookies.set('layers', layers, cookieOptions);
+	}
+
+	return layers;
 }
 
 function setupLayers() {
@@ -461,7 +472,7 @@ function addLayerButton(layer) {
 
 function checkAddLayers() {
 	//i tried really hard to find a standard way of doing this.  addSource requires vector layers to be tiled?  map.setStyle only allows one style?
-	var layers = query.get('layers');
+	var layers = getLayers();
 	if(layers === null) {
 		return;
 	}
