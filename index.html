@@ -307,7 +307,7 @@ function addMoveListener() {
 }
 
 function addClickListeners() {
-	map.on("contextmenu", fireLongpress);
+	map.on('contextmenu', fireLongpress);
 	addLongPressListener();
 }
 
@@ -399,6 +399,7 @@ function checkAddGeoJsonLayer() {
 }
 
 function addLayers(data) {
+	//i tried really hard to find a standard way of doing this.  addSource requires vector layers to be tiled?  map.setStyle only allows one style?
 	var sources = data['sources'];
 	for(var id in sources) {
 		var source = sources[id];
@@ -413,6 +414,9 @@ function addLayers(data) {
 		var id = layer['id'];
 		if(map.getLayer(id) != null) {
 			continue;
+		}
+		if(layer['beforeId'] != null && map.getLayer(layer['beforeId']) == null) {
+			layer['beforeId'] = null;
 		}
 		map.addLayer({
 			...getOptions(layer['type']),
@@ -471,7 +475,6 @@ function addLayerButton(layer) {
 }
 
 function checkAddLayers() {
-	//i tried really hard to find a standard way of doing this.  addSource requires vector layers to be tiled?  map.setStyle only allows one style?
 	var layers = getLayers();
 	if(layers === null) {
 		return;
@@ -499,7 +502,7 @@ function getOptions(type) {
 			'icon-allow-overlap': true,
 			'text-allow-overlap': true,
 			'text-anchor': 'top',
-			'text-font': ['Noto Sans Italic'],
+			'text-font': ['Open Sans Regular'],
 			'text-max-width': 9,
 			'icon-offset': [0, -3],
 			'text-offset': [0, .2],
