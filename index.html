@@ -307,7 +307,7 @@ function addMoveListener() {
 }
 
 function addClickListeners() {
-	map.on('contextmenu', fireLongpress);
+	map.on('contextmenu', fireLongpress); //right click
 	addLongPressListener();
 }
 
@@ -323,12 +323,10 @@ function addLongPressListener() {
 		if(e.originalEvent.touches.length > 1) {
 			return;
 		}
-		else {
-			longPressTimeout = setTimeout(() => {
-				window.navigator.vibrate(100);
-				setTimeout(() => fireLongpress(e), 1);
-			}, 500);
-		}
+		longPressTimeout = setTimeout(() => {
+			window.navigator.vibrate(100);
+			setTimeout(() => fireLongpress(e), 1);
+		}, 500);
 	});
 	map.on('touchend', clearLongPressTimeout);
 	map.on('touchcancel', clearLongPressTimeout);
@@ -345,18 +343,18 @@ function fireLongpress(e) {
 	if(openrouteAccessToken === null) {
 		return;
 	}
-	var event = e.originalEvent;
 	
-	addRoutePoint(e.lngLat);
 	var point = e.lngLat;
-	alert(`${point.lat.toFixed(4)},${e.lngLat.lng.toFixed(4)} ${point.lng.toFixed(4)},${e.lngLat.lat.toFixed(4)}`);
+	addRoutePoint(point);
+	alert(`${pointToString(point, 4)} ${reversedPointToString(point, 4)}`);
 }
 
 
 var startPoint = null;
 
-function pointToString(point) {return `${point.lng.toFixed(6)},${point.lat.toFixed(6)}`;}
-	
+function pointToString(point, accuracy = 6) {return `${point.lat.toFixed(accuracy)},${point.lng.toFixed(accuracy)}`;}
+function reversedPointToString(point, accuracy = 6) {return `${point.lng.toFixed(accuracy)},${point.lat.toFixed(accuracy)}`;}
+
 function addRoutePoint(point) {
 	if(startPoint === null) {
 		startPoint = point;
@@ -367,7 +365,12 @@ function addRoutePoint(point) {
 
 	var endPoint = point;
 
-	var url = `https://api.openrouteservice.org/v2/directions/cycling-regular?api_key=${openrouteAccessToken}&start=${pointToString(startPoint)}&end=${pointToString(endPoint)}`;
+	var query = new URLSearchParams();
+	query.set('api_key', openrouteAccessToken);
+	query.set('start', reversedPointToString(startPoint));
+	query.set('end', reversedPointToString(endPoint));
+
+	var url = `https://api.openrouteservice.org/v2/directions/cycling-regular?${query}`;
 
 	ajaxGet(url, (data) => {
 		//sending in url directly here doesn't work because of somesuch header (Accept: application/json) made the server mad
