@@ -193,6 +193,8 @@ var query = new URLSearchParams(window.location.search);
 var cookieOptions = { expires: 182 };
 
 var map = setupMap();
+var savePointUrl;
+
 addMoveListener();
 addClickListeners();
 checkAddGeoJsonLayer();
@@ -308,6 +310,11 @@ function addMoveListener() {
 
 function addClickListeners() {
 	map.on('contextmenu', fireLongpress); //right click
+	map.on('click', (e) => {
+		if(e.originalEvent.ctrlKey) {
+			fireSavePoint(e);
+		}
+	});
 	addLongPressListener();
 }
 
@@ -346,7 +353,6 @@ function fireLongpress(e) {
 	
 	var point = e.lngLat;
 	addRoutePoint(point);
-	alert(`${pointToString(point, 4)} ${reversedPointToString(point, 4)}`);
 }
 
 
@@ -387,6 +393,32 @@ function addRoutePoint(point) {
 	});
 	
 	startPoint = null;
+}
+
+function fireSavePoint(e) {
+	if(savePointUrl == null) {
+		return;
+	}
+
+	var category = prompt('please enter a category', 'edits');
+	if(category == null) {
+		return;
+	}
+
+	var title = prompt('please enter a title', '');
+	if(title == null) {
+		return;
+	}
+	
+	var query = new URLSearchParams();
+	query.set('point', pointToString(e.lngLat, 4));
+	query.set('category', category);
+	query.set('title', title);
+	var url = `${savePointUrl}?${query}`;
+
+	ajaxGet(url, (data) => {
+		alert(data.msg);
+	});
 }
 
 function addLayerHelper(id, type, data) {
@@ -446,6 +478,7 @@ function addLayers(data) {
 			});
 		}
 	}
+	savePointUrl = data['savePointUrl'];
 }
 
 function addLayerButton(layer) {
@@ -489,8 +522,15 @@ function checkAddLayers() {
 
 function ajaxGet(url, callback) {
 	var xhttp = new XMLHttpRequest();
-	xhttp.addEventListener("load", function() {callback(JSON.parse(this.responseText));});
-	xhttp.addEventListener("error", function() {console.error('trouble making request.  response:  ', this.statusText);});
+	xhttp.addEventListener("load", function() {
+		var returnValue = JSON.parse(this.responseText);
+		if(returnValue.error) {
+			alert(`http: ${returnValue.error}`);
+			return;
+		}
+		callback(returnValue);
+	});
+	xhttp.addEventListener("error", function() {alert(`http: ${this.statusText}`);});
 	xhttp.open("GET", url, true);
 	xhttp.send();
 }
