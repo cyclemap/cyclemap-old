@@ -195,6 +195,11 @@ var cookieOptions = { expires: 182 };
 var map = setupMap();
 var savePointUrl;
 
+console.log('start');
+map.on('load', (e)=>console.log(e.type));
+map.on('style.load', (e)=>console.log(e.type));
+map.on('styledata', (e)=>console.log(e.type));
+
 addMoveListener();
 addClickListeners();
 checkAddGeoJsonLayer();
@@ -516,7 +521,11 @@ function checkAddLayers() {
 		return;
 	}
 	ajaxGet(layers, (data) => {
-		map.on('style.load', () => addLayers(data));
+		console.log('checkAddLayers has content');
+		map.on('style.load', (e) => {
+			console.log(`${e.type}: checkAddLayers adding layers`);
+			addLayers(data);
+		});
 	});
 }
 
