@@ -526,6 +526,10 @@ function checkAddLayers() {
 			console.log(`${e.type}: checkAddLayers adding layers`);
 			addLayers(data);
 		});
+		map.on('load', (e) => {
+			console.log(`${e.type}: checkAddLayers adding layers`);
+			addLayers(data);
+		});
 	});
 }
 
