@@ -385,10 +385,6 @@ function addRoutePoint(point) {
 
 	ajaxGet(url, (data) => {
 		//sending in url directly here doesn't work because of somesuch header (Accept: application/json) made the server mad
-		if(data.error !== undefined) {
-			alert(data.error.message);
-			return;
-		}
 		addLayerHelper('route', 'line', data);
 		var summary = data.features[0].properties.summary;
 		var duration = (summary.duration / 3600).toFixed(1);
@@ -538,6 +534,10 @@ function ajaxGet(url, callback) {
 	xhttp.addEventListener("load", function() {
 		var returnValue = JSON.parse(this.responseText);
 		if(returnValue.error) {
+			if(returnValue.error.message) {
+				alert(`http: ${returnValue.error.message}`);
+				return;
+			}
 			alert(`http: ${returnValue.error}`);
 			return;
 		}
