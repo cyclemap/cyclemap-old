@@ -2,7 +2,7 @@
 
 set -e #exit on failure
 
-maplibreVersion=1.14.0
+maplibreVersion=1.15.2
 maplibreUrl=https://github.com/maplibre/maplibre-gl-js/releases/download/v$maplibreVersion/dist.zip
 geocoderUrl=https://github.com/Joxit/pelias-mapbox-gl-js/archive/refs/heads/master.zip
 
