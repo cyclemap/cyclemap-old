@@ -317,7 +317,7 @@ function addMoveListener() {
 function addClickListeners() {
 	map.on('contextmenu', fireLongpress); //right click
 	map.on('click', (e) => {
-		if(e.originalEvent.ctrlKey) {
+		if(e.originalEvent.ctrlKey || e.originalEvent.metaKey) {
 			fireSavePoint(e);
 		}
 	});
