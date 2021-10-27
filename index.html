@@ -316,6 +316,11 @@ function addMoveListener() {
 
 function addClickListeners() {
 	map.on('contextmenu', fireLongpress); //right click
+	map.on('mouseup', (e) => {
+		if(e.originalEvent.shiftKey) {
+			alert(`point:  ${pointToString(e.lngLat, 4)}`);
+		}
+	});
 	map.on('click', (e) => {
 		if(e.originalEvent.ctrlKey || e.originalEvent.metaKey) {
 			fireSavePoint(e);
