@@ -1,5 +1,12 @@
-* see about link for info on technologies used and licensing
-* see [my edits to openmaptiles](https://github.com/cyclemap/openmaptiles-cycle/)
+
+## domain name
+
+* [cyclemap.us](https://cyclemap.us/)
+
+## notes
+
+* see about link for technologies and licensing
+* back-end repository here:  [my edits to openmaptiles](https://github.com/cyclemap/openmaptiles-cycle/)
 
 ## setup
 
