@@ -91,6 +91,9 @@
 			vertical-align: middle;
 			transform: scale(.75);
 		}
+		.picker {
+			font-size: 10px;
+		}
 		.picker button {
 			font-size: 10px;
 		}
@@ -119,9 +122,10 @@
 		">g</button>
 	</div>
 	<nav id="backgroundPicker" class="picker">
-		<button id="cyclemap" class="mapboxgl-ctrl mapboxgl-ctrl-group active">cyc</button>
-		<button id="satellite" class="mapboxgl-ctrl mapboxgl-ctrl-group">sat</button>
+		<button id="cyclemap" class="mapboxgl-ctrl mapboxgl-ctrl-group active" style="visibility: hidden;">cyc</button>
+		<button id="satellite" class="mapboxgl-ctrl mapboxgl-ctrl-group" style="visibility: hidden;">sat</button>
 	</nav>
+	<button id="clearLayers" class="mapboxgl-ctrl mapboxgl-ctrl-group picker" style="visibility: hidden;">clr</button>
 	<nav id="layerPicker" class="picker">
 	</nav>
 	<div id="map" class="map">
@@ -234,18 +238,19 @@ function getLayers() {
 function setupLayers() {
 	var destination = document.getElementsByClassName('mapboxgl-ctrl-top-right')[0];
 	destination.append(document.getElementById('backgroundPicker'))
+	destination.append(document.getElementById('clearLayers'));
 	destination.append(document.getElementById('layerPicker'));
 
 	var backgroundPicker = document.getElementById('backgroundPicker');
-	var layerControls = backgroundPicker.getElementsByTagName('button');
+	var backgroundButtons = backgroundPicker.getElementsByTagName('button');
 
-	if(maplibregl.accessToken == null) {
-		Array.prototype.forEach.call(layerControls, (input) => input.style.visibility = 'hidden');
+	if(maplibregl.accessToken != null) {
+		Array.prototype.forEach.call(backgroundButtons, (input) => input.style.visibility = 'visible');
 	}
 
-	Array.prototype.forEach.call(layerControls, (input) => input.onclick = (event) => {
+	Array.prototype.forEach.call(backgroundButtons, (input) => input.onclick = (event) => {
 		var layerId = input.id;
-		Array.prototype.forEach.call(layerControls, (input) => input.classList.remove('active'));
+		Array.prototype.forEach.call(backgroundButtons, (input) => input.classList.remove('active'));
 		input.classList.add('active');
 		var style = getStyle();
 		if(layerId=='satellite') {
@@ -253,6 +258,16 @@ function setupLayers() {
 		}
 		map.setStyle(style);
 	});
+
+	document.getElementById('clearLayers').onclick = (event) => {
+		var layerPicker = document.getElementById('layerPicker');
+		var layerButtons = layerPicker.getElementsByTagName('button');
+		Array.prototype.forEach.call(layerButtons, (input) => {
+			var layerId = input.id;
+			input.classList.remove('active');
+			map.setLayoutProperty(layerId, 'visibility', 'none');
+		});
+	};
 }
 
 function setupMap() {
@@ -515,6 +530,8 @@ function addLayerButton(layer) {
 		}
 	};
 	layerPicker.appendChild(button);
+	
+	document.getElementById('clearLayers').style.visibility = 'visible';
 }
 
 function checkAddLayers() {
