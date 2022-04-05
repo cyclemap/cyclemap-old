@@ -249,11 +249,11 @@ function setupLayers() {
 	}
 
 	Array.prototype.forEach.call(backgroundButtons, (input) => input.onclick = (event) => {
-		var layerId = input.id;
+		var id = input.id;
 		Array.prototype.forEach.call(backgroundButtons, (input) => input.classList.remove('active'));
 		input.classList.add('active');
 		var style = getStyle();
-		if(layerId=='satellite') {
+		if(id=='satellite') {
 			style = 'mapbox://styles/mapbox/satellite-v9';
 		}
 		map.setStyle(style);
@@ -263,9 +263,9 @@ function setupLayers() {
 		var layerPicker = document.getElementById('layerPicker');
 		var layerButtons = layerPicker.getElementsByTagName('button');
 		Array.prototype.forEach.call(layerButtons, (input) => {
-			var layerId = input.id;
+			var id = input.id;
 			input.classList.remove('active');
-			map.setLayoutProperty(layerId, 'visibility', 'none');
+			removeLayer(id);
 		});
 	};
 }
@@ -444,7 +444,7 @@ function fireSavePoint(e) {
 }
 
 function addLayerHelper(id, type, data) {
-	addLayers({"sources": {[id]: {"type": "geojson", "data": data}}, "layers": [{"id": id, "type": type, "source": id}]});
+	addLayerButton({"id": id, "type": type, "source": {"type": "geojson", "data": data}});
 }
 
 function checkAddGeoJsonLayer() {
@@ -455,52 +455,10 @@ function checkAddGeoJsonLayer() {
 	map.on('style.load', () => addLayerHelper('geoJsonData', type, geoJsonData));
 }
 
-function addLayers(data) {
-	//i tried really hard to find a standard way of doing this.  addSource requires vector layers to be tiled?  map.setStyle only allows one style?
-	var sources = data['sources'];
-	for(var id in sources) {
-		var source = sources[id];
-		if(map.getSource(id) == null) {
-			map.addSource(id, source);
-		}
-		else {
-			map.getSource(id).setData(source['data']);
-		}
-	}
-	for(var layer of data['layers']) {
-		var id = layer['id'];
-		if(map.getLayer(id) != null) {
-			continue;
-		}
-		if(layer['beforeId'] != null && map.getLayer(layer['beforeId']) == null) {
-			layer['beforeId'] = null;
-		}
-		map.addLayer({
-			...getOptions(layer['type']),
-			...layer,
-		}, layer['beforeId']);
-		
+function addLayerButtons(layers) {
+	for(var layer of layers) {
 		addLayerButton(layer);
-
-		var active = document.getElementById(id).classList.contains("active")
-		map.setLayoutProperty(id, 'visibility', active ? 'visible' : 'none');
-
-		if(layer['type'] === 'symbol') {
-			map.on('click', id, function(e) {
-				if(e.features[0].properties.description == null) {
-					return;
-				}
-				var coordinates = e.features[0].geometry.coordinates;
-				var description = e.features[0].properties.description;
-
-				new maplibregl.Popup()
-					.setLngLat(coordinates)
-					.setHTML(description)
-					.addTo(map);
-			});
-		}
 	}
-	savePointUrl = data['savePointUrl'];
 }
 
 function addLayerButton(layer) {
@@ -517,21 +475,58 @@ function addLayerButton(layer) {
 	button.setAttribute('class', 'mapboxgl-ctrl mapboxgl-ctrl-group');
 	if(layer['active'] === undefined || layer['active'] === true) {
 		classList.add('active');
+		addLayer(layer);
 	}
 	button.appendChild(document.createTextNode(id.substr(0, 3)));
 	button.onclick = (e) => {
 		var active = !classList.contains('active');
-		map.setLayoutProperty(id, 'visibility', active ? 'visible' : 'none');
 		if(active) {
 			classList.add('active');
+			addLayer(layer);
 		}
 		else {
 			classList.remove('active');
+			removeLayer(layer['id']);
 		}
 	};
 	layerPicker.appendChild(button);
 	
 	document.getElementById('clearLayers').style.visibility = 'visible';
+}
+
+function addLayer(layer) {
+	var id = layer['id'];
+	if(layer['beforeId'] != null && map.getLayer(layer['beforeId']) == null) {
+		layer['beforeId'] = null;
+	}
+	map.addLayer({
+		...getOptions(layer['type']),
+		...layer,
+	}, layer['beforeId']);
+	
+
+	if(layer['type'] === 'symbol') {
+		map.on('click', id, function(e) {
+			if(e.features[0].properties.description == null) {
+				return;
+			}
+			var coordinates = e.features[0].geometry.coordinates;
+			var description = e.features[0].properties.description;
+
+			new maplibregl.Popup()
+				.setLngLat(coordinates)
+				.setHTML(description)
+				.addTo(map);
+		});
+	}
+}
+
+function removeLayer(id) {
+	if(map.getLayer(id) == null) {
+		return;
+	}
+	map.removeLayer(id);
+	map.removeSource(id);
 }
 
 function checkAddLayers() {
@@ -541,13 +536,14 @@ function checkAddLayers() {
 	}
 	ajaxGet(layers, (data) => {
 		console.log('checkAddLayers has content');
+		savePointUrl = data['savePointUrl'];
 		map.on('style.load', (e) => {
 			console.log(`${e.type}: checkAddLayers adding layers`);
-			addLayers(data);
+			addLayerButtons(data['layers']);
 		});
 		map.on('load', (e) => {
 			console.log(`${e.type}: checkAddLayers adding layers`);
-			addLayers(data);
+			addLayerButtons(data['layers']);
 		});
 	});
 }
