@@ -332,7 +332,7 @@ function addMoveListener() {
 }
 
 function addClickListeners() {
-	map.on('contextmenu', fireLongpress); //right click
+	map.on('contextmenu', fireLongPress); //right click
 	map.on('mouseup', (e) => {
 		if(e.originalEvent.shiftKey) {
 			alert(`point:  ${pointToString(e.lngLat, 4)}`);
@@ -360,7 +360,7 @@ function addLongPressListener() {
 		}
 		longPressTimeout = setTimeout(() => {
 			window.navigator.vibrate(100);
-			setTimeout(() => fireLongpress(e), 1);
+			setTimeout(() => fireLongPress(e), 1);
 		}, 500);
 	});
 	map.on('touchend', clearLongPressTimeout);
@@ -374,7 +374,7 @@ function addLongPressListener() {
 	map.on('gestureend', clearLongPressTimeout);
 }
 
-function fireLongpress(e) {
+function fireLongPress(e) {
 	if(openrouteAccessToken === null) {
 		return;
 	}
@@ -391,6 +391,10 @@ function reversedPointToString(point, accuracy = 6) {return `${point.lng.toFixed
 
 function addRoutePoint(point) {
 	if(startPoint === null) {
+		removeLayerButton('startPoint');
+		removeLayerButton('endPoint');
+		removeLayerButton('route');
+		
 		startPoint = point;
 		var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: 'start'} };
 		addLayerHelper('startPoint', 'symbol', pointFeature);
@@ -520,6 +524,13 @@ function addLayer(layer) {
 				.setHTML(description)
 				.addTo(map);
 		});
+	}
+}
+
+function removeLayerButton(id) {
+	removeLayer(id);
+	if(document.getElementById(id) != null) {
+		document.getElementById(id).remove();
 	}
 }
 
