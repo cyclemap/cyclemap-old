@@ -3,13 +3,14 @@
 set -e #exit on failure
 
 
-maplibreVersion=1.15.2
+maplibreVersion=2.1.9
 jsCookieVersion=2
 geocoderVersion=master
 
 
 maplibreUrl=https://github.com/maplibre/maplibre-gl-js/releases/download/v$maplibreVersion/dist.zip
 geocoderUrl=https://github.com/Joxit/pelias-mapbox-gl-js/archive/refs/heads/$geocoderVersion.zip
+base='https://tileserver.cyclemap.us/styles/maptiler-cyclemap'
 
 curl \
 	--location \
@@ -29,8 +30,6 @@ bsdtar \
 	--strip-components 1 \
 	--file - \
 	'*geocoder*'
-
-base='https://tileserver.cyclemap.us/styles/maptiler-cyclemap'
 
 curl --output style.json "$base/style.json"
 

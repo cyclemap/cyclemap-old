@@ -21,10 +21,10 @@
 			bottom: 0;
 			width: 100%;
 		}
-		.mapboxgl-ctrl-scale, .mapboxgl-ctrl-attrib, .legend {
+		.maplibregl-ctrl-scale, .maplibregl-ctrl-attrib, .legend {
 			pointer-events: none;
 		}
-		.mapboxgl-ctrl, .border, .legend {
+		.maplibregl-ctrl, .border, .legend {
 			user-select: none;
 		}
 		.links {
@@ -104,28 +104,28 @@
 	</style>
 </head>
 <body>
-	<div class="links mapboxgl-ctrl-top-left">
-		<button id="about-button" class="mapboxgl-ctrl mapboxgl-ctrl-group" onclick="
+	<div class="links maplibregl-ctrl-top-left">
+		<button id="about-button" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
 			document.getElementById('about').style.visibility = 'visible';
 		">cyclemap</button>
-		<button id="strava-heatmap" class="mapboxgl-ctrl mapboxgl-ctrl-group" onclick="
+		<button id="strava-heatmap" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
 			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
 			window.open(`https://www.strava.com/heatmap#${(zoom+1).toFixed(2)}/${longitude.toFixed(5)}/${latitude.toFixed(5)}/hot/ride`);
 		">heat</button>
-		<button id="osm-edit" class="mapboxgl-ctrl mapboxgl-ctrl-group" onclick="
+		<button id="osm-edit" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
 			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
 			window.open(`https://www.openstreetmap.org/edit#map=${(zoom+1).toFixed(0)}/${latitude.toFixed(5)}/${longitude.toFixed(5)}`);
 		">osm</button>
-		<button id="osm-edit" class="mapboxgl-ctrl mapboxgl-ctrl-group" onclick="
+		<button id="osm-edit" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
 			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
 			window.open(`https://www.google.com/maps/@${latitude.toFixed(5)},${longitude.toFixed(5)},${(zoom+1).toFixed(0)}z`);
 		">g</button>
 	</div>
 	<nav id="backgroundPicker" class="picker">
-		<button id="cyclemap" class="mapboxgl-ctrl mapboxgl-ctrl-group active" style="visibility: hidden;">cyc</button>
-		<button id="satellite" class="mapboxgl-ctrl mapboxgl-ctrl-group" style="visibility: hidden;">sat</button>
+		<button id="cyclemap" class="maplibregl-ctrl maplibregl-ctrl-group active" style="visibility: hidden;">cyc</button>
+		<button id="satellite" class="maplibregl-ctrl maplibregl-ctrl-group" style="visibility: hidden;">sat</button>
 	</nav>
-	<button id="clearLayers" class="mapboxgl-ctrl mapboxgl-ctrl-group picker" style="visibility: hidden;">clr</button>
+	<button id="clearLayers" class="maplibregl-ctrl maplibregl-ctrl-group picker" style="visibility: hidden;">clr</button>
 	<nav id="layerPicker" class="picker">
 	</nav>
 	<div id="map" class="map">
@@ -191,7 +191,7 @@
 	</div></div>
 	<script>
 
-maplibregl.accessToken = 'pk.eyJ1IjoiY3ljbGVtYXB1cyIsImEiOiJjanNhbHRlaGMwMGp2NDNqeG80Mzk2cmExIn0.0OBPtvf3KANeaA6QOCk1yw';
+mapboxAccessToken = 'pk.eyJ1IjoiY3ljbGVtYXB1cyIsImEiOiJjanNhbHRlaGMwMGp2NDNqeG80Mzk2cmExIn0.0OBPtvf3KANeaA6QOCk1yw';
 openrouteAccessToken = '5b3ce3597851110001cf6248ba1b7964630a48d9841d1336bd6686c7';
 
 var highZoom = 12;
@@ -238,7 +238,7 @@ function getLayers() {
 }
 
 function setupLayers() {
-	var destination = document.getElementsByClassName('mapboxgl-ctrl-top-right')[0];
+	var destination = document.getElementsByClassName('maplibregl-ctrl-top-right')[0];
 	destination.append(document.getElementById('backgroundPicker'))
 	destination.append(document.getElementById('clearLayers'));
 	destination.append(document.getElementById('layerPicker'));
@@ -246,7 +246,7 @@ function setupLayers() {
 	var backgroundPicker = document.getElementById('backgroundPicker');
 	var backgroundButtons = backgroundPicker.getElementsByTagName('button');
 
-	if(maplibregl.accessToken != null) {
+	if(mapboxAccessToken != null) {
 		Array.prototype.forEach.call(backgroundButtons, (input) => input.style.visibility = 'visible');
 	}
 
@@ -254,11 +254,14 @@ function setupLayers() {
 		var id = input.id;
 		Array.prototype.forEach.call(backgroundButtons, (input) => input.classList.remove('active'));
 		input.classList.add('active');
-		var style = getStyle();
-		if(id=='satellite') {
-			style = 'mapbox://styles/mapbox/satellite-v9';
+		
+		var satelliteOn = id=='satellite';
+		if(satelliteOn) {
+			addLayer({ id: 'raster-satellite', source: {'type': 'raster', 'tiles': [`https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${mapboxAccessToken}`]}, type: 'raster', layout: {'visibility': 'visible'}, 'beforeId': 'satellite-anchor' });
 		}
-		map.setStyle(style);
+		else {
+			removeLayer('raster-satellite');
+		}
 	});
 
 	document.getElementById('clearLayers').onclick = (event) => {
@@ -282,14 +285,13 @@ function setupMap() {
 	var longitude = Cookies.get('longitude') || defaultLongitude;
 	var zoom = Cookies.get('zoom') || defaultZoom;
 
-	var style = getStyle();
-
 	var map = new maplibregl.Map({
 		container: 'map',
-		style: style,
+		style: getStyle(),
 		center: new maplibregl.LngLat(longitude, latitude),
 		zoom: zoom,
 		hash: true,
+		failIfMajorPerformanceCaveat: true,
 		dragRotate: false
 	});
 	map.addControl(new maplibregl.NavigationControl());
@@ -478,7 +480,7 @@ function addLayerButton(layer) {
 	}
 
 	button.setAttribute('id', id);
-	button.setAttribute('class', 'mapboxgl-ctrl mapboxgl-ctrl-group');
+	button.setAttribute('class', 'maplibregl-ctrl maplibregl-ctrl-group');
 	if(layer['active'] === undefined || layer['active'] === true) {
 		classList.add('active');
 		addLayer(layer);
@@ -654,6 +656,9 @@ function getOptions(type) {
 				"heatmap-opacity": 0.8
 			}
 		}
+	}
+	else if(type == 'raster') {
+		return;
 	}
 	console.error('unknown type: ', type);
 }
