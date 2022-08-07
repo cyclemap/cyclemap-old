@@ -4,7 +4,7 @@ set -e #exit on failure
 
 
 maplibreVersion=2.1.9
-jsCookieVersion=2
+jsCookieVersion=3.0.1
 geocoderVersion=master
 
 
@@ -45,5 +45,5 @@ for filename in sprite{,@2x}.{png,json}; do
 done
 
 
-curl --output js.cookie.min.js https://cdn.jsdelivr.net/npm/js-cookie@$jsCookieVersion/src/js.cookie.min.js
+curl --output js.cookie.min.js --location https://github.com/js-cookie/js-cookie/releases/download/v$jsCookieVersion/js.cookie.min.js
 
