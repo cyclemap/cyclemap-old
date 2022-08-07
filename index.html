@@ -8,6 +8,13 @@
 	<script src="maplibre-gl.js"></script>
 	<script src="js.cookie.min.js"></script>
 	<script src='pelias-geocoder.js'></script>
+
+	<script src='rain.js'></script>
+	<script src='route.js'></script>
+	<script src='save.js'></script>
+	<script src='geocode.js'></script>
+	<script src='layers.js'></script>
+	
 	<link rel='stylesheet' href='pelias-geocoder.css' type='text/css'/>
 	<link rel="icon" href="sprite/bikeicon.png">
 	<style>
@@ -121,11 +128,7 @@
 			window.open(`https://www.google.com/maps/@${latitude.toFixed(5)},${longitude.toFixed(5)},${(zoom+1).toFixed(0)}z`);
 		">g</button>
 	</div>
-	<nav id="backgroundPicker" class="picker">
-		<button id="cyclemap" class="maplibregl-ctrl maplibregl-ctrl-group active" style="visibility: hidden;">cyc</button>
-		<button id="satellite" class="maplibregl-ctrl maplibregl-ctrl-group" style="visibility: hidden;">sat</button>
-	</nav>
-	<button id="clearLayers" class="maplibregl-ctrl maplibregl-ctrl-group picker" style="visibility: hidden;">clr</button>
+	<button id="clearLayers" class="maplibregl-ctrl maplibregl-ctrl-group picker" style="visibility: hidden;">clear</button>
 	<nav id="layerPicker" class="picker">
 	</nav>
 	<div id="map" class="map">
@@ -191,15 +194,13 @@
 	</div></div>
 	<script>
 
-mapboxAccessToken = 'pk.eyJ1IjoiY3ljbGVtYXB1cyIsImEiOiJjanNhbHRlaGMwMGp2NDNqeG80Mzk2cmExIn0.0OBPtvf3KANeaA6QOCk1yw';
-openrouteAccessToken = '5b3ce3597851110001cf6248ba1b7964630a48d9841d1336bd6686c7';
-
 var highZoom = 12;
 
 var query = new URLSearchParams(window.location.search);
 var cookieOptions = { expires: 182 };
 
 var map = setupMap();
+
 var savePointUrl;
 
 console.log('start');
@@ -224,55 +225,6 @@ function getStyle() {
 	}
 
 	return styleRoot + (style != null ? style : 'style.json');
-}
-
-function getLayers() {
-	var cookieLayers = Cookies.get('layers') || null;
-	var layers = query.has('layers') ? query.get('layers') : cookieLayers;
-	
-	if(layers != null) {
-		Cookies.set('layers', layers, cookieOptions);
-	}
-
-	return layers;
-}
-
-function setupLayers() {
-	var destination = document.getElementsByClassName('maplibregl-ctrl-top-right')[0];
-	destination.append(document.getElementById('backgroundPicker'))
-	destination.append(document.getElementById('clearLayers'));
-	destination.append(document.getElementById('layerPicker'));
-
-	var backgroundPicker = document.getElementById('backgroundPicker');
-	var backgroundButtons = backgroundPicker.getElementsByTagName('button');
-
-	if(mapboxAccessToken != null) {
-		Array.prototype.forEach.call(backgroundButtons, (input) => input.style.visibility = 'visible');
-	}
-
-	Array.prototype.forEach.call(backgroundButtons, (input) => input.onclick = (event) => {
-		var id = input.id;
-		Array.prototype.forEach.call(backgroundButtons, (input) => input.classList.remove('active'));
-		input.classList.add('active');
-		
-		var satelliteOn = id=='satellite';
-		if(satelliteOn) {
-			addLayer({ id: 'raster-satellite', source: {'type': 'raster', 'tiles': [`https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${mapboxAccessToken}`]}, type: 'raster', layout: {'visibility': 'visible'}, 'beforeId': 'satellite-anchor' });
-		}
-		else {
-			removeLayer('raster-satellite');
-		}
-	});
-
-	document.getElementById('clearLayers').onclick = (event) => {
-		var layerPicker = document.getElementById('layerPicker');
-		var layerButtons = layerPicker.getElementsByTagName('button');
-		Array.prototype.forEach.call(layerButtons, (input) => {
-			var id = input.id;
-			input.classList.remove('active');
-			removeLayer(id);
-		});
-	};
 }
 
 function setupMap() {
@@ -300,17 +252,7 @@ function setupMap() {
 		positionOptions: {enableHighAccuracy: true},
 		trackUserLocation: true
 	}));
-	map.addControl(new PeliasGeocoder({
-		params: {
-			'api_key': openrouteAccessToken,
-			'boundary.country': 'us,ca,mx',
-		},
-		marker: {icon: 'marker_11', anchor: 'bottom'},
-		flyTo: 'hybrid',
-		removeDuplicates: true,
-		url: 'https://api.openrouteservice.org/geocode',
-		useFocusPoint: true
-	}));
+	addGeocode(map);
 	return map;
 }
 
@@ -318,6 +260,9 @@ function addMoveListener() {
 	map.on('moveend', checkMove);
 	checkMove();
 	function checkMove() {
+		if(map.isMoving()) {
+			return;
+		}
 		var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
 
 		Cookies.set('latitude', latitude, cookieOptions);
@@ -334,334 +279,16 @@ function addMoveListener() {
 }
 
 function addClickListeners() {
-	map.on('contextmenu', fireLongPress); //right click
 	map.on('mouseup', (e) => {
 		if(e.originalEvent.shiftKey) {
 			alert(`point:  ${pointToString(e.lngLat, 4)}`);
 		}
 	});
-	map.on('click', (e) => {
-		if(e.originalEvent.ctrlKey || e.originalEvent.metaKey) {
-			fireSavePoint(e);
-		}
-	});
-	addLongPressListener();
+	addSavePointListener();
+	addRouteListener();
+	addRainListener();
 }
 
-
-/**
- * long press implementation here is fairly manual
- */
-function addLongPressListener() {
-	let longPressTimeout = null;
-	let clearLongPressTimeout = () => clearTimeout(longPressTimeout);
-
-	map.on('touchstart', (e) => {
-		if(e.originalEvent.touches.length > 1) {
-			return;
-		}
-		longPressTimeout = setTimeout(() => {
-			window.navigator.vibrate(100);
-			setTimeout(() => fireLongPress(e), 1);
-		}, 500);
-	});
-	map.on('touchend', clearLongPressTimeout);
-	map.on('touchcancel', clearLongPressTimeout);
-	map.on('touchmove', clearLongPressTimeout);
-	map.on('pointerdrag', clearLongPressTimeout);
-	map.on('pointermove', clearLongPressTimeout);
-	map.on('moveend', clearLongPressTimeout);
-	map.on('gesturestart', clearLongPressTimeout);
-	map.on('gesturechange', clearLongPressTimeout);
-	map.on('gestureend', clearLongPressTimeout);
-}
-
-function fireLongPress(e) {
-	if(openrouteAccessToken === null) {
-		return;
-	}
-	
-	var point = e.lngLat;
-	addRoutePoint(point);
-}
-
-
-var startPoint = null;
-
-function pointToString(point, accuracy = 6) {return `${point.lat.toFixed(accuracy)},${point.lng.toFixed(accuracy)}`;}
-function reversedPointToString(point, accuracy = 6) {return `${point.lng.toFixed(accuracy)},${point.lat.toFixed(accuracy)}`;}
-
-function addRoutePoint(point) {
-	if(startPoint === null) {
-		removeLayerButton('startPoint');
-		removeLayerButton('endPoint');
-		removeLayerButton('route');
-		
-		startPoint = point;
-		var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: 'start'} };
-		addLayerHelper('startPoint', 'symbol', pointFeature);
-		return;
-	}
-
-	var endPoint = point;
-
-	var query = new URLSearchParams();
-	query.set('api_key', openrouteAccessToken);
-	query.set('start', reversedPointToString(startPoint));
-	query.set('end', reversedPointToString(endPoint));
-
-	var url = `https://api.openrouteservice.org/v2/directions/cycling-regular?${query}`;
-
-	ajaxGet(url, (data) => {
-		//sending in url directly here doesn't work because of somesuch header (Accept: application/json) made the server mad
-		addLayerHelper('route', 'line', data);
-		var summary = data.features[0].properties.summary;
-		var duration = (summary.duration / 3600).toFixed(1);
-		var distance = (summary.distance / 1000).toFixed(0);
-		var pointFeature = { type: 'Feature', geometry: { type: 'Point', coordinates: [point.lng, point.lat] }, properties: {'marker-symbol': 'marker', title: `end ${duration}h\n${distance}km`} };
-		addLayerHelper('endPoint', 'symbol', pointFeature);
-	});
-	
-	startPoint = null;
-}
-
-function fireSavePoint(e) {
-	if(savePointUrl == null) {
-		return;
-	}
-
-	var category = prompt('please enter a category', 'edited');
-	if(category == null) {
-		return;
-	}
-
-	var title = prompt('please enter a title', '');
-	if(title == null) {
-		return;
-	}
-	
-	var query = new URLSearchParams();
-	query.set('point', pointToString(e.lngLat, 4));
-	query.set('category', category);
-	query.set('title', title);
-	var url = `${savePointUrl}?${query}`;
-
-	ajaxGet(url, (data) => {
-		alert(data.msg);
-	});
-}
-
-function addLayerHelper(id, type, data) {
-	addLayerButton({"id": id, "type": type, "source": {"type": "geojson", "data": data}});
-}
-
-function checkAddGeoJsonLayer() {
-	var geoJsonData = query.get('geo'), type = query.get('type') != null ? query.get('type') : 'symbol';
-	if(geoJsonData === null) {
-		return;
-	}
-	map.on('style.load', () => addLayerHelper('geoJsonData', type, geoJsonData));
-}
-
-function addLayerButtons(layers) {
-	for(var layer of layers) {
-		addLayerButton(layer);
-	}
-}
-
-function addLayerButton(layer) {
-	var layerPicker = document.getElementById('layerPicker');
-	var button = document.createElement('button');
-	var classList = button.classList;
-	var id = layer['id'];
-
-	if(document.getElementById(id) != null) {
-		return;
-	}
-
-	button.setAttribute('id', id);
-	button.setAttribute('class', 'maplibregl-ctrl maplibregl-ctrl-group');
-	if(layer['active'] === undefined || layer['active'] === true) {
-		classList.add('active');
-		addLayer(layer);
-	}
-	button.appendChild(document.createTextNode(id.substr(0, 3)));
-	button.onclick = (e) => {
-		var active = !classList.contains('active');
-		if(active) {
-			classList.add('active');
-			addLayer(layer);
-		}
-		else {
-			classList.remove('active');
-			removeLayer(layer['id']);
-		}
-	};
-	layerPicker.appendChild(button);
-	
-	document.getElementById('clearLayers').style.visibility = 'visible';
-}
-
-function addLayer(layer) {
-	var id = layer['id'];
-	if(layer['beforeId'] != null && map.getLayer(layer['beforeId']) == null) {
-		layer['beforeId'] = null;
-	}
-	map.addLayer({
-		...getOptions(layer['type']),
-		...layer,
-	}, layer['beforeId']);
-	
-
-	if(layer['type'] === 'symbol') {
-		map.on('click', id, function(e) {
-			if(e.features[0].properties.description == null) {
-				return;
-			}
-			var coordinates = e.features[0].geometry.coordinates;
-			var description = e.features[0].properties.description;
-
-			new maplibregl.Popup()
-				.setLngLat(coordinates)
-				.setHTML(description)
-				.addTo(map);
-		});
-	}
-}
-
-function removeLayerButton(id) {
-	removeLayer(id);
-	if(document.getElementById(id) != null) {
-		document.getElementById(id).remove();
-	}
-}
-
-function removeLayer(id) {
-	if(map.getLayer(id) == null) {
-		return;
-	}
-	map.removeLayer(id);
-	map.removeSource(id);
-}
-
-function checkAddLayers() {
-	var layers = getLayers();
-	if(layers === null) {
-		return;
-	}
-	ajaxGet(layers, (data) => {
-		console.log('checkAddLayers has content');
-		savePointUrl = data['savePointUrl'];
-		map.on('style.load', (e) => {
-			console.log(`${e.type}: checkAddLayers adding layers`);
-			addLayerButtons(data['layers']);
-		});
-		map.on('load', (e) => {
-			console.log(`${e.type}: checkAddLayers adding layers`);
-			addLayerButtons(data['layers']);
-		});
-	});
-}
-
-function ajaxGet(url, callback) {
-	var xhttp = new XMLHttpRequest();
-	xhttp.addEventListener("load", function() {
-		var returnValue = JSON.parse(this.responseText);
-		if(returnValue.error) {
-			if(returnValue.error.message) {
-				alert(`http: ${returnValue.error.message}`);
-				return;
-			}
-			alert(`http: ${returnValue.error}`);
-			return;
-		}
-		callback(returnValue);
-	});
-	xhttp.addEventListener("error", function() {alert(`http: ${this.statusText}`);});
-	xhttp.open("GET", url, true);
-	xhttp.send();
-}
-
-
-function getOptions(type) {
-	if(type == 'symbol') {
-		return {'layout': {
-			'icon-image': ["concat", ["coalesce", ["get", "marker-symbol"], "marker"], "_11"],
-			'icon-size': 1.5,
-			'text-field': '{title}',
-			'icon-allow-overlap': true,
-			'text-allow-overlap': true,
-			'text-anchor': 'top',
-			'text-font': ['Open Sans Regular'],
-			'text-max-width': 9,
-			'icon-offset': [0, -3],
-			'text-offset': [0, .2],
-			'text-padding': 2,
-			'text-size': 12,
-		},
-		'paint': {
-			'text-color': '#666',
-			'text-halo-blur': 0.5,
-			'text-halo-color': 'white',
-			'text-halo-width': 2,
-		}};
-	}
-	else if(type == 'line') {
-		return {'layout': {
-			'line-join': 'round',
-		},
-		'paint': {
-			'line-color': '#00d',
-			'line-width': {
-				'base': 1.2,
-				'stops': [[6, 2], [20, 20]],
-			},
-			'line-opacity': .4,
-		}};
-	}
-	else if(type == 'heatmap') {
-		return {
-			"maxzoom": 16,
-			"minzoom": 9,
-			"paint": {
-				"heatmap-weight":
-					["*",
-						["coalesce", ["get", "count"], 1],
-						0.00001
-					]
-				,
-				"heatmap-intensity": {
-					"stops": [
-						[9, 0.1],
-						[16, 3000]
-					]
-				},
-				"heatmap-radius": {
-					"type": "exponential",
-					"stops": [
-						[9, 1],
-						[16, 20]
-					]
-				},
-				"heatmap-color": [
-					"interpolate",
-					["linear"],
-					["heatmap-density"],
-					0, "rgba(0,0,0,0)",
-					0.1, "#103",
-					0.3, "#926",
-					0.4, "#f71",
-					0.5, "#ffa"
-				],
-				"heatmap-opacity": 0.8
-			}
-		}
-	}
-	else if(type == 'raster') {
-		return;
-	}
-	console.error('unknown type: ', type);
-}
 
 	</script>
 </body>
