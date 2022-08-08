@@ -12,7 +12,6 @@
 	<script src='rain.js'></script>
 	<script src='route.js'></script>
 	<script src='save.js'></script>
-	<script src='geocode.js'></script>
 	<script src='layers.js'></script>
 	
 	<link rel='stylesheet' href='pelias-geocoder.css' type='text/css'/>
@@ -203,16 +202,14 @@ var map = setupMap();
 
 var savePointUrl;
 
-console.log('start');
-map.on('load', (e)=>console.log(e.type));
-map.on('style.load', (e)=>console.log(e.type));
-map.on('styledata', (e)=>console.log(e.type));
-
 addMoveListener();
 addClickListeners();
 checkAddGeoJsonLayer();
 checkAddLayers();
 setupLayers();
+setupSavePoint();
+setupRoute();
+setupRain();
 
 function getStyle() {
 	var styleRoot = '';
@@ -252,7 +249,6 @@ function setupMap() {
 		positionOptions: {enableHighAccuracy: true},
 		trackUserLocation: true
 	}));
-	addGeocode(map);
 	return map;
 }
 
@@ -284,9 +280,6 @@ function addClickListeners() {
 			alert(`point:  ${pointToString(e.lngLat, 4)}`);
 		}
 	});
-	addSavePointListener();
-	addRouteListener();
-	addRainListener();
 }
 
 

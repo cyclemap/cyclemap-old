@@ -1,4 +1,8 @@
 
+function setupSavePoint() {
+	addSavePointListener();
+}
+
 function addSavePointListener() {
 	map.on('click', (e) => {
 		if(e.originalEvent.ctrlKey || e.originalEvent.metaKey) {
@@ -6,10 +10,6 @@ function addSavePointListener() {
 		}
 	});
 }
-
-
-function pointToString(point, accuracy = 6) {return `${point.lat.toFixed(accuracy)},${point.lng.toFixed(accuracy)}`;}
-function reversedPointToString(point, accuracy = 6) {return `${point.lng.toFixed(accuracy)},${point.lat.toFixed(accuracy)}`;}
 
 function fireSavePoint(e) {
 	if(savePointUrl == null) {

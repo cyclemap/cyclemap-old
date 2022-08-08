@@ -18,12 +18,14 @@ function setupLayers() {
 	destination.append(document.getElementById('clearLayers'));
 	destination.append(document.getElementById('layerPicker'));
 
-	map.on('style.load', (e) => {
-		addLayerButtonsSpecial();
-	});
-	map.on('load', (e) => {
-		addLayerButtonsSpecial();
-	});
+	if(mapboxAccessToken != null) {
+		map.on('style.load', (e) => {
+			addSatelliteButton();
+		});
+		map.on('load', (e) => {
+			addSatelliteButton();
+		});
+	}
 
 	document.getElementById('clearLayers').onclick = (event) => {
 		var layerPicker = document.getElementById('layerPicker');
@@ -36,35 +38,14 @@ function setupLayers() {
 	};
 }
 
-//satellite and rain-history are always available
-function addLayerButtonsSpecial() {
-	if(mapboxAccessToken != null) {
-		addLayerButton({
-			"id": "satellite-raster",
-			"name": "sat",
-			"active": false,
-			"type": "raster",
-			"source": {"type": "raster", "tiles": [`https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${mapboxAccessToken}`]},
-			"layout": {"visibility": "visible"},
-			"beforeId": "satellite-anchor",
-		});
-	}
+function addSatelliteButton() {
 	addLayerButton({
-		"id": "rain-history-3",
-		"name": "rain 3d",
+		"id": "satellite-raster",
+		"name": "sat",
 		"active": false,
 		"type": "raster",
+		"source": {"type": "raster", "tiles": [`https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${mapboxAccessToken}`]},
 		"layout": {"visibility": "visible"},
-		"paint": {"raster-opacity": 0.5},
-		"beforeId": "satellite-anchor",
-	});
-	addLayerButton({
-		"id": "rain-history-1",
-		"name": "rain 1d",
-		"active": false,
-		"type": "raster",
-		"layout": {"visibility": "visible"},
-		"paint": {"raster-opacity": 0.5},
 		"beforeId": "satellite-anchor",
 	});
 }
@@ -127,10 +108,10 @@ function addLayer(layer) {
 		layer['beforeId'] = null;
 	}
 	
+	if(layer['onAddLayer'] !== undefined) {
+		layer['onAddLayer'](layer);
+	}
 	if(map.getSource(id) == null) {
-		if(id.startsWith('rain-history')) {
-			layer['source']=getRainOptions(parseInt(id.substr(-1)));
-		}
 		map.addSource(id, layer['source']);
 	}
 
@@ -159,6 +140,9 @@ function addLayer(layer) {
 
 function removeLayerButton(id) {
 	removeLayer(id);
+	if(map.getSource(id) != null) {
+		map.removeSource(id);
+	}
 	if(document.getElementById(id) != null) {
 		document.getElementById(id).remove();
 	}

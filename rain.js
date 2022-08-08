@@ -5,13 +5,14 @@ const RAIN_LOAD_DELAY = 1500;
 //i assume they're volatile?
 const LAYER_ID_MAP =  {'1': 23, '3': 27};
 
-function boundsToArray(bounds) {
-	var output = bounds.toArray();
-	return output[0].concat(output[1]);
-}
-
-function boundsToCorners(bounds) {
-	return [bounds.getNorthWest().toArray(), bounds.getNorthEast().toArray(), bounds.getSouthEast().toArray(), bounds.getSouthWest().toArray()];
+function setupRain() {
+	map.on('style.load', (e) => {
+		addRainButtons();
+	});
+	map.on('load', (e) => {
+		addRainButtons();
+	});
+	addRainListener();
 }
 
 function addRainListener() {
@@ -30,7 +31,7 @@ function addRainListener() {
 	map.on('pointermove', clearRainTimeout);
 }
 
-function fireRain(e) {
+function fireRain() {
 	for(var days in LAYER_ID_MAP) {
 		var id = `rain-history-${days}`;
 		if(map.getLayer(id) != null) {
@@ -56,4 +57,47 @@ function getRainOptions(days) {
 		"coordinates": boundsToCorners(map.getBounds()),
 	};
 }
+
+function addRainButtons() {
+	addLayerButton({
+		"id": "rain-history-3",
+		"name": "rain 3d",
+		"active": false,
+		"type": "raster",
+		"layout": {"visibility": "visible"},
+		"paint": {"raster-opacity": 0.5},
+		"beforeId": "satellite-anchor",
+		"onAddLayer": onAddRainLayer,
+	});
+	addLayerButton({
+		"id": "rain-history-1",
+		"name": "rain 1d",
+		"active": false,
+		"type": "raster",
+		"layout": {"visibility": "visible"},
+		"paint": {"raster-opacity": 0.5},
+		"beforeId": "satellite-anchor",
+		"onAddLayer": onAddRainLayer,
+	});
+}
+
+function onAddRainLayer(layer) {
+	var id = layer['id'];
+	if(map.getSource(id) == null) {
+		layer['source']=getRainOptions(parseInt(id.substr(-1)));
+	}
+	else {
+		map.getSource(id).updateImage(getRainOptions(id.substr(-1)));
+	}
+}
+
+function boundsToArray(bounds) {
+	var output = bounds.toArray();
+	return output[0].concat(output[1]);
+}
+
+function boundsToCorners(bounds) {
+	return [bounds.getNorthWest().toArray(), bounds.getNorthEast().toArray(), bounds.getSouthEast().toArray(), bounds.getSouthWest().toArray()];
+}
+
 

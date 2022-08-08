@@ -3,6 +3,11 @@ openrouteAccessToken = '5b3ce3597851110001cf6248ba1b7964630a48d9841d1336bd6686c7
 
 var startPoint = null;
 
+function setupRoute() {
+	addRouteListener();
+	addGeocode();
+}
+
 
 /**
  * long press implementation here is fairly manual
@@ -74,5 +79,23 @@ function addRoutePoint(point) {
 	});
 	
 	startPoint = null;
+}
+
+function pointToString(point, accuracy = 6) {return `${point.lat.toFixed(accuracy)},${point.lng.toFixed(accuracy)}`;}
+function reversedPointToString(point, accuracy = 6) {return `${point.lng.toFixed(accuracy)},${point.lat.toFixed(accuracy)}`;}
+
+
+function addGeocode() {
+   map.addControl(new PeliasGeocoder({
+       params: {
+           'api_key': openrouteAccessToken,
+           'boundary.country': 'us,ca,mx',
+       },
+       marker: {icon: 'marker_11', anchor: 'bottom'},
+       flyTo: 'hybrid',
+       removeDuplicates: true,
+       url: 'https://api.openrouteservice.org/geocode',
+       useFocusPoint: true
+   }));
 }
 
