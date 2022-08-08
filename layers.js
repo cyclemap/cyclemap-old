@@ -50,8 +50,17 @@ function addLayerButtonsSpecial() {
 		});
 	}
 	addLayerButton({
-		"id": "rain-history",
-		"name": "rain",
+		"id": "rain-history-3",
+		"name": "rain 3d",
+		"active": false,
+		"type": "raster",
+		"layout": {"visibility": "visible"},
+		"paint": {"raster-opacity": 0.5},
+		"beforeId": "satellite-anchor",
+	});
+	addLayerButton({
+		"id": "rain-history-1",
+		"name": "rain 1d",
 		"active": false,
 		"type": "raster",
 		"layout": {"visibility": "visible"},
@@ -119,8 +128,8 @@ function addLayer(layer) {
 	}
 	
 	if(map.getSource(id) == null) {
-		if(id == 'rain-history') {
-			layer['source']=getRainOptions();
+		if(id.startsWith('rain-history')) {
+			layer['source']=getRainOptions(parseInt(id.substr(-1)));
 		}
 		map.addSource(id, layer['source']);
 	}

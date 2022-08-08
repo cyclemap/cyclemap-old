@@ -1,4 +1,10 @@
 
+const RAIN_LOAD_DELAY = 1500;
+
+//layer ids found here:  https://nowcoast.noaa.gov/arcgis/rest/services/nowcoast/analysis_meteohydro_sfc_qpe_time/MapServer/?f=json
+//i assume they're volatile?
+const LAYER_ID_MAP =  {'1': 23, '3': 27};
+
 function boundsToArray(bounds) {
 	var output = bounds.toArray();
 	return output[0].concat(output[1]);
@@ -8,7 +14,6 @@ function boundsToCorners(bounds) {
 	return [bounds.getNorthWest().toArray(), bounds.getNorthEast().toArray(), bounds.getSouthEast().toArray(), bounds.getSouthWest().toArray()];
 }
 
-var RAIN_LOAD_DELAY = 1500;
 function addRainListener() {
 	let rainTimeout = null;
 	let clearRainTimeout = () => clearTimeout(rainTimeout);
@@ -26,10 +31,12 @@ function addRainListener() {
 }
 
 function fireRain(e) {
-	if(map.getLayer('rain-history') == null) {
-		return;
+	for(var days in LAYER_ID_MAP) {
+		var id = `rain-history-${days}`;
+		if(map.getLayer(id) != null) {
+			map.getSource(id).updateImage(getRainOptions(days));
+		}
 	}
-	map.getSource('rain-history').updateImage(getRainOptions());
 }
 
 function getSize() {
@@ -40,10 +47,12 @@ function getSize() {
 	return [width, height];
 }
 
-function getRainOptions() {
+function getRainOptions(days) {
+	var layerId = LAYER_ID_MAP[days];
+
 	return {
 		"type": "image",
-		"url" : `https://nowcoast.noaa.gov/arcgis/rest/services/nowcoast/analysis_meteohydro_sfc_qpe_time/MapServer/export?bbox=${boundsToArray(map.getBounds()).join(',')}&size=${getSize().join(',')}&dpi=96&format=png8&transparent=true&bboxSR=4326&imageSR=3857&layers=show:27&f=image`,
+		"url" : `https://nowcoast.noaa.gov/arcgis/rest/services/nowcoast/analysis_meteohydro_sfc_qpe_time/MapServer/export?bbox=${boundsToArray(map.getBounds()).join(',')}&size=${getSize().join(',')}&dpi=96&format=png8&transparent=true&bboxSR=4326&imageSR=3857&layers=show:${layerId}&f=image`,
 		"coordinates": boundsToCorners(map.getBounds()),
 	};
 }
