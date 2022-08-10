@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>cyclemap</title>
+	<link rel="stylesheet" type="text/css" href="node_modules/maplibre-gl/dist/maplibre-gl.css" />
+
+	<!-- typescript -->
+	<script type="importmap">
+		{
+			"imports": {
+				"maplibre-gl": "./node_modules/maplibre-gl/dist/maplibre-gl.js",
+				"js-cookie": "./node_modules/js-cookie/dist/js.cookie.mjs"
+			}
+		}
+	</script>
+	<script type="module" src="dist/main.js"></script>
+	
+	<link rel='stylesheet' href='pelias-geocoder.css' type='text/css'/>
+	<link rel="icon" href="sprite/bikeicon.png">
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+		}
+		.map {
+			position: absolute;
+			top: 0;
+			bottom: 0;
+			width: 100%;
+		}
+		.maplibregl-ctrl-scale, .maplibregl-ctrl-attrib, .legend {
+			pointer-events: none;
+		}
+		.maplibregl-ctrl, .border, .legend {
+			user-select: none;
+		}
+		.links {
+			top: 50px;
+		}
+		.about {
+			z-index: 2;
+			width: 100%;
+			height: 100%;
+			position: absolute;
+			visibility: hidden;
+			backdrop-filter: blur(3px);
+		}
+		.border {
+			margin-top: 5em;
+			margin-left: auto;
+			margin-right: auto;
+			width: 30em;
+
+			display: block;
+
+			padding: 50px;
+			padding-top: 25px; padding-bottom: 25px;
+
+			background-color: hsl(47, 26%, 88%);
+			border-radius: 80px;
+			box-shadow: 2px 2px 4px 4px black inset;
+		}
+		.legend {
+			position: absolute;
+			display: inline-block;
+			left: 110px;
+			bottom: 2px;
+
+			font-size: small;
+			z-index: 2;
+		}
+		.pathLegend {
+			display: inline-block;
+			padding: 1px;
+			background: hsla(0, 0%, 100%, 75%);
+		}
+		.pathLegendColor {
+			display: inline-block;
+			text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;
+		}
+		.legendItem {
+			display: inline-block;
+		}
+		#footLegend {
+			display: inline-block;
+			transition: opacity 2s;
+		}
+		.iconLegend {
+			display: inline-block;
+			bottom: 0px;
+			background: hsla(0, 0%, 100%, 75%);
+		}
+		.icon {
+			display: inline-block;
+			background: url(sprite/sprite@2x.png) no-repeat;
+			width: 34px;
+			height: 28px;
+			vertical-align: middle;
+			transform: scale(.75);
+		}
+		.picker {
+			font-size: 10px;
+		}
+		.picker button {
+			font-size: 10px;
+		}
+		.picker button.active {
+			background-color: #48b;
+			color: #fff;
+		}
+	</style>
+</head>
+<body>
+	<div class="links maplibregl-ctrl-top-left">
+		<button id="about-button" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
+			document.getElementById('about').style.visibility = 'visible';
+		">cyclemap</button>
+		<button id="strava-heatmap" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
+			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
+			window.open(`https://www.strava.com/heatmap#${(zoom+1).toFixed(2)}/${longitude.toFixed(5)}/${latitude.toFixed(5)}/hot/ride`);
+		">heat</button>
+		<button id="osm-edit" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
+			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
+			window.open(`https://www.openstreetmap.org/edit#map=${(zoom+1).toFixed(0)}/${latitude.toFixed(5)}/${longitude.toFixed(5)}`);
+		">osm</button>
+		<button id="osm-edit" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
+			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
+			window.open(`https://www.google.com/maps/@${latitude.toFixed(5)},${longitude.toFixed(5)},${(zoom+1).toFixed(0)}z`);
+		">g</button>
+	</div>
+	<button id="clearLayers" class="maplibregl-ctrl maplibregl-ctrl-group picker" style="visibility: hidden;">clear</button>
+	<nav id="layerPicker" class="picker">
+	</nav>
+	<div id="map" class="map">
+	</div>
+	<div class="legend">
+		<div class="pathLegend">
+			<div class="legendItem"><div style="color: hsl(120, 60%, 30%);" class="pathLegendColor">█</div> paved</div>
+			<div class="legendItem"><div style="color: hsl(25, 60%, 45%);" class="pathLegendColor">█</div> unpaved?</div>
+			<div class="legendItem"><div style="color: hsl(0, 0%, 50%);" class="pathLegendColor">█</div> unpaved road</div>
+			<div class="legendItem" id="footLegend"><div style="color: hsl(0, 0%, 94%);" class="pathLegendColor">█</div> foot</div>
+		</div>
+		<div class="iconLegend">
+			<div class="legendItem"><div class="icon" style="background-position: 0 -112px;"></div> shop</div>
+			<div class="legendItem"><div class="icon" style="background-position: 0 -248px;"></div> station</div>
+			<div class="legendItem"><div class="icon" style="background-position: -34px -248px;"></div> parking</div>
+			<div class="legendItem"><div class="icon" style="background-position: -68px -248px;"></div> rental</div>
+			<div class="legendItem"><div class="icon" style="background-position: -204px -112px;"></div> water</div>
+		</div>
+	</div>
+	<div id="about" class="about"><div class="border">
+		<p><a href="#" onclick="
+			document.getElementById('about').style.visibility = 'hidden';
+		">⇐</a></p>
+		<ul>
+		<li>if you notice a problem, please
+		<a class="osm-link" href="#" onclick="
+			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
+			window.open(`https://www.openstreetmap.org/edit#map=${(zoom+1).toFixed(0)}/${latitude.toFixed(5)}/${longitude.toFixed(5)}`);
+		">edit osm</a></li>
+		<li>"surface" is how we know what is unpaved</li>
+		<li>changes to osm take two weeks to propagate</li>
+		</ul>
+
+		<p>thanks to the many projects that this site depends on.</p>
+
+		<ul>
+		<li><a href="https://www.openstreetmap.org/copyright">openstreetmap contributors</a></li>
+		<li><a href="https://github.com/cyclemap/cyclemap.github.io">github pages</a></li>
+		<li><a href="https://openmaptiles.org/">openmaptiles</a> (<a href="https://github.com/cyclemap/openmaptiles-cycle/">our edits</a>)</li>
+		<li><a href="https://github.com/openmaptiles/maptiler-basic-gl-style">maptiler styles</a> (<a href="https://github.com/cyclemap/openmaptiles-cycle/">our edits</a>)</li>
+		<li><a href="https://github.com/maptiler/tileserver-gl/">maptiler tile server</a></li>
+		<li><a href="https://www.postgresql.org/">postgresql</a> &amp; <a href="https://postgis.net/">postgis</a></li>
+		<li><a href="https://www.wikidata.org/">wikidata</a></li>
+		<li><a href="https://openrouteservice.org/">openrouteservice</a></li>
+			<li><a href="https://openaddresses.io/">openaddresses</a></li>
+			<li><a href="https://www.geonames.org/">geonames</a></li>
+			<li><a href="https://www.whosonfirst.org/">who's on first</a></li>
+		<!-- openmaptiles-tools -->
+			<li><a href="https://www.naturalearthdata.com/">natural earth</a></li>
+			<li><a href="https://github.com/pnorman/osmborder">osmborder</a></li>
+			<li><a href="https://omniscale.com/">omniscale</a></li>
+		<li><a href="https://github.com/maplibre/maplibre-gl-js">maplibre</a></li>
+		<li><a href="https://maputnik.github.io/">maputnik</a></li>
+		<li><a href="https://www.docker.com/">docker</a> / <a href="https://ubuntu.com/">ubuntu</a> / <a href="https://www.gnu.org/">gnu</a> / <a href="https://www.kernel.org/">linux</a></li>
+		</ul>
+
+		<p>if you notice an issue that can't be fixed by
+		<a class="osm-link" href="#" onclick="
+			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
+			window.open(`https://www.openstreetmap.org/edit#map=${(zoom+1).toFixed(0)}/${latitude.toFixed(5)}/${longitude.toFixed(5)}`);
+		">editing osm</a>,
+		please <a href="https://github.com/cyclemap/openmaptiles-cycle/issues/new">file a ticket</a>.  if you see a route that SHOULDN'T be a bike route, we want to hear from you: please <a href="https://github.com/cyclemap/openmaptiles-cycle/issues/new">file a ticket</a>!</p>
+	</div></div>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+	"name": "cyclemap",
+	"version": "1.0.0",
+	"description": "maps tuned for biking",
+	"main": "main.js",
+	"scripts": {
+		"test": "test()"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/cyclemap/cyclemap.github.io.git"
+	},
+	"keywords": [
+		"maps",
+		"biking",
+		"bike",
+		"cycle"
+	],
+	"author": "adrian",
+	"license": "BSD-3-Clause",
+	"bugs": {
+		"url": "https://github.com/cyclemap/openmaptiles-cycle/issues/new"
+	},
+	"homepage": "https://cyclemap.us/",
+	"devDependencies": {
+		"typescript": "^4.7.4"
+	},
+	"dependencies": {
+		"maplibre-gl": "v2.2.0-pre.3",
+		"@maplibre/maplibre-gl-geocoder": "1.4.1",
+		"js-cookie": "3.0.1"
+	}
+}

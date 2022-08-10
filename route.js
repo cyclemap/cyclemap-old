@@ -81,9 +81,6 @@ function addRoutePoint(point) {
 	startPoint = null;
 }
 
-function pointToString(point, accuracy = 6) {return `${point.lat.toFixed(accuracy)},${point.lng.toFixed(accuracy)}`;}
-function reversedPointToString(point, accuracy = 6) {return `${point.lng.toFixed(accuracy)},${point.lat.toFixed(accuracy)}`;}
-
 
 function addGeocode() {
    map.addControl(new PeliasGeocoder({
