@@ -3,7 +3,7 @@ const TILE_SIZE = 2048;
 
 //layer ids found here:  https://nowcoast.noaa.gov/arcgis/rest/services/nowcoast/analysis_meteohydro_sfc_qpe_time/MapServer/?f=json
 //i assume they're volatile?
-const LAYER_ID_MAP =  {'1': 23, '3': 27};
+const LAYER_ID_MAP =  {'1': 19, '3': 27};
 
 function setupRain() {
 	map.on('style.load', (e) => {
