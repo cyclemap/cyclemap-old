@@ -18,6 +18,7 @@ function addRainButtons() {
 	for(var days in LAYER_ID_MAP) {
 		addRainButton(days);
 	}
+	addAnimation();
 }
 
 function addRainButton(days) {
@@ -39,5 +40,52 @@ function addRainButton(days) {
 			],
 		},
 	});
+}
+
+const frameCount = 100;
+let currentImage = 0;
+
+function getPath() {
+	return `https://aporter.org/map/ride/ride-${currentImage.toString().padStart(2, '0')}.png`;
+}
+
+function addAnimation() {
+	const center=[38.88, -77.14], size=.10;
+	const bounds = new maplibregl.LngLatBounds(
+		new maplibregl.LngLat(center[1]-size, center[0]-size),
+		new maplibregl.LngLat(center[1]+size, center[0]+size)
+	);
+	addLayerButton({
+		"id": 'animation',
+		"name": 'anim',
+		"active": false,
+		"type": "raster",
+		"layout": {"visibility": "visible"},
+		"paint": {"raster-opacity": 0.8},
+		"source": {
+			"type": "image",
+			"url" : getPath(),
+			"coordinates": [bounds.getNorthWest().toArray(), bounds.getNorthEast().toArray(), bounds.getSouthEast().toArray(), bounds.getSouthWest().toArray()],
+		},
+		"onAddLayer": addAnimationLayer,
+	});
+}
+
+let animationInterval = null;
+
+function addAnimationLayer(layer) {
+	console.log('creating interval');
+	if(animationInterval != null) {
+		console.log('killing interval');
+		clearInterval(animationInterval);
+	}
+	//NO!  this will spin even when layer is disabled
+	animationInterval = setInterval(() => {
+		if(map.getLayer('animation') != null && map.getSource('animation') != null) {
+			currentImage = (currentImage + 1) % frameCount;
+			console.log('updating image', getPath());
+			map.getSource('animation').updateImage({ url: getPath() });
+		}
+	}, 500);
 }
 
