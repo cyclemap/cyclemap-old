@@ -3,8 +3,8 @@
 
 //these imports weren't working:
 //import * as maplibregl from 'maplibre-gl'; //typescript liked it but browser said "Uncaught TypeError: maplibregl.Map is not a constructor" for the "new maplibregl.Map(...)" below
-import { Map } from 'maplibre-gl'; //typescript liked it but browser said "Uncaught SyntaxError: The requested module 'maplibre-gl' does not provide an export named 'Map'"
-import Cookies from 'js-cookie';
+//import { Map } from 'maplibre-gl'; //typescript liked it but browser said "Uncaught SyntaxError: The requested module 'maplibre-gl' does not provide an export named 'Map'"
+//import Cookies from 'js-cookie';
 
 const HIGH_ZOOM: number = 12;
 const DEFAULT_LATITUDE = 40;
@@ -17,7 +17,7 @@ const COOKIE_OPTIONS = { expires: 182 };
 class MapControl {
 	query = new URLSearchParams(window.location.search);
 
-	map: Map = this.setupMap();
+	map: maplibregl.Map = this.setupMap();
 
 	savePointUrl : string = null;
 
@@ -54,7 +54,7 @@ class MapControl {
 		var zoom = Cookies.get('zoom') || DEFAULT_ZOOM;
 
 			//center: new maplibregl.LngLat(longitude, latitude),
-		var map = new Map({
+		var map = new maplibregl.Map({
 			container: 'map',
 			style: this.getStyle(),
 			zoom: zoom,

@@ -5,7 +5,6 @@
 		"checkJs": false,
 		"esModuleInterop": true,
 		"importHelpers": false,
-		"isolatedModules": true,
 		"jsx": "react",
 		"module": "esnext",
 		"moduleResolution": "Node",
@@ -14,6 +13,7 @@
 		"sourceMap": true,
 		"strict": false,
 		"target": "es2017",
+		"outDir": "dist",
 		"lib": [
 			"ESNext",
 			"DOM",
@@ -22,5 +22,9 @@
 		],
 		"types": ["geojson"]
 	},
-	"include": ["src"]
+	"include": [
+		"src",
+		"node_modules/maplibre-gl/dist/maplibre-gl.d.ts",
+		"node_modules/js-cookie/dist/js.cookie.min.js"
+	]
 }
