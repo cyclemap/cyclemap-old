@@ -249,6 +249,7 @@ function setupMap() {
 		positionOptions: {enableHighAccuracy: true},
 		trackUserLocation: true
 	}));
+	map.scrollZoom.setWheelZoomRate(4 / 450); //default is 1 / 450
 	return map;
 }
 
