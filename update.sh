@@ -3,7 +3,7 @@
 set -e #exit on failure
 
 
-maplibreVersion=2.1.9
+maplibreVersion=3.0.0-pre.1
 jsCookieVersion=3.0.1
 geocoderVersion=master
 
