@@ -12,6 +12,18 @@ maplibreUrl=https://github.com/maplibre/maplibre-gl-js/releases/download/v$mapli
 geocoderUrl=https://github.com/Joxit/pelias-mapbox-gl-js/archive/refs/heads/$geocoderVersion.zip
 base='https://tileserver.cyclemap.us/styles/maptiler-cyclemap'
 
+curl --output style.json "$base/style.json"
+
+sed --in-place --expression="s#$base#https://cyclemap.us/sprite#g" style.json
+cp style.json style-normal.json
+sed --expression='s/hsl(25, 60%, 45%)/red/2' style.json >style-red.json
+sed \
+	--expression='s/hsl(120, 60%, 30%)/hsl(0, 0%, 100%)/g' \
+	--expression='s/hsl(25, 60%, 45%)/hsl(0, 0%, 100%)/1' \
+	--expression='s/"line-color":"hsl(0, 0%, \(95\|97\|100\)%)"/&,"line-opacity":0.2/g' \
+	--expression='s/"line-color":"hsl(25, 60%, 45%)","line-width":{[^{}]*}/"line-color":"red","line-width":{"base":1.1,"stops":[[9,4],[18,6]]}/' \
+	style.json >style-highlight.json
+
 curl \
 	--location \
 	--silent \
@@ -30,13 +42,6 @@ bsdtar \
 	--strip-components 1 \
 	--file - \
 	'*geocoder*'
-
-curl --output style.json "$base/style.json"
-
-sed --in-place --expression="s#$base#https://cyclemap.us/sprite#g" style.json
-cp style.json style-normal.json
-sed --expression='s/hsl(25, 60%, 45%)/red/2' style.json >style-red.json
-sed --expression='s/hsl(120, 60%, 30%)/white/g' --expression='s/hsl(25, 60%, 45%)/white/1' --expression='s/hsl(25, 60%, 45%)/red/' style.json >style-highlight.json
 
 mkdir --parents sprite
 
