@@ -111,18 +111,18 @@
 </head>
 <body>
 	<div class="links maplibregl-ctrl-top-left">
-		<button id="about-button" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
+		<button class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
 			document.getElementById('about').style.visibility = 'visible';
 		">cyclemap</button>
-		<button id="strava-heatmap" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
+		<button class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
 			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
 			window.open(`https://www.strava.com/heatmap#${(zoom+1).toFixed(2)}/${longitude.toFixed(5)}/${latitude.toFixed(5)}/hot/ride`);
 		">heat</button>
-		<button id="osm-edit" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
+		<button class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
 			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
 			window.open(`https://www.openstreetmap.org/edit#map=${(zoom+1).toFixed(0)}/${latitude.toFixed(5)}/${longitude.toFixed(5)}`);
 		">osm</button>
-		<button id="osm-edit" class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
+		<button class="maplibregl-ctrl maplibregl-ctrl-group" onclick="
 			var latitude = map.getCenter().lat, longitude = map.getCenter().lng, zoom = map.getZoom();
 			window.open(`https://www.google.com/maps/@${latitude.toFixed(5)},${longitude.toFixed(5)},${(zoom+1).toFixed(0)}z`);
 		">g</button>
