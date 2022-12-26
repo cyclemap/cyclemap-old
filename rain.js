@@ -30,7 +30,7 @@ function addRainButton(days) {
 		"type": "raster",
 		"layout": {"visibility": "visible"},
 		"paint": {"raster-opacity": 0.5},
-		"beforeId": "satellite-anchor",
+		"beforeId": "rain-anchor",
 		"source": {
 			"type": "raster",
 			"tileSize": TILE_SIZE,
