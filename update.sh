@@ -3,7 +3,7 @@
 set -e #exit on failure
 
 
-maplibreVersion=3.0.0-pre.1
+maplibreVersion=3.0.0-pre.3
 jsCookieVersion=3.0.1
 geocoderVersion=master
 
@@ -24,6 +24,12 @@ sed \
 	--expression='s/"line-color":"hsl(25, 60%, 45%)","line-width":{[^{}]*}/"line-color":"red","line-width":{"base":1.1,"stops":[[9,4],[18,6]]}/' \
 	style.json >style-highlight.json
 
+mkdir --parents sprite
+
+for filename in sprite{,@2x}.{png,json}; do
+	curl --output sprite/$filename "$base/$filename"
+done
+
 curl \
 	--location \
 	--silent \
@@ -42,13 +48,6 @@ bsdtar \
 	--strip-components 1 \
 	--file - \
 	'*geocoder*'
-
-mkdir --parents sprite
-
-for filename in sprite{,@2x}.{png,json}; do
-	curl --output sprite/$filename "$base/$filename"
-done
-
 
 curl --output js.cookie.min.js --location https://github.com/js-cookie/js-cookie/releases/download/v$jsCookieVersion/js.cookie.min.js
 
