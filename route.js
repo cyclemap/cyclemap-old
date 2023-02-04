@@ -89,7 +89,6 @@ function addGeocode() {
    map.addControl(new PeliasGeocoder({
        params: {
            'api_key': openrouteAccessToken,
-           'boundary.country': 'us,ca,mx',
        },
        marker: {icon: 'marker_11', anchor: 'bottom'},
        flyTo: 'hybrid',
