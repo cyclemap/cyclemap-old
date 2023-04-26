@@ -6,6 +6,7 @@
 	<title>cyclemap</title>
 	<link rel="stylesheet" type="text/css" href="maplibre-gl.css" />
 	<script src="maplibre-gl.js"></script>
+	<script src="maplibre-gl-vector-text-protocol.min.js"></script>
 	<script src="js.cookie.min.js"></script>
 	<script src='pelias-geocoder.js'></script>
 
@@ -225,6 +226,7 @@ function getStyle() {
 }
 
 function setupMap() {
+	VectorTextProtocol.addProtocols(maplibregl);
 	//maplibregl.setRTLTextPlugin('mapbox-gl-rtl-text.js');
 	var defaultLatitude = 40;
 	var defaultLongitude = -96;
