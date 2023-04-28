@@ -1,5 +1,6 @@
 
-mapboxAccessToken = 'pk.eyJ1IjoiY3ljbGVtYXB1cyIsImEiOiJjanNhbHRlaGMwMGp2NDNqeG80Mzk2cmExIn0.0OBPtvf3KANeaA6QOCk1yw';
+const mapboxAccessToken = 'pk.eyJ1IjoiY3ljbGVtYXB1cyIsImEiOiJjanNhbHRlaGMwMGp2NDNqeG80Mzk2cmExIn0.0OBPtvf3KANeaA6QOCk1yw';
+const DEFAULT_GEOJSON_TYPE = 'line';
 
 
 function getLayers() {
@@ -55,7 +56,7 @@ function addLayerHelper(id, type, data) {
 }
 
 function checkAddGeoJsonLayer() {
-	var geoJsonData = query.get('geo'), type = query.get('type') != null ? query.get('type') : 'symbol';
+	var geoJsonData = query.get('geo'), type = query.get('type') != null ? query.get('type') : DEFAULT_GEOJSON_TYPE;
 	if(geoJsonData === null) {
 		return;
 	}
