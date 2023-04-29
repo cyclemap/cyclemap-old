@@ -1,4 +1,4 @@
-/* MapLibre GL JS is licensed under the 3-Clause BSD License. Full text of license: https://github.com/maplibre/maplibre-gl-js/blob/v3.0.0-pre.4/LICENSE.txt */
+/* MapLibre GL JS is licensed under the 3-Clause BSD License. Full text of license: https://github.com/maplibre/maplibre-gl-js/blob/v3.0.0-pre.5/LICENSE.txt */
 (function (global, factory) {
 typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
 typeof define === 'function' && define.amd ? define(factory) :
@@ -71,643 +71,6 @@ function getAugmentedNamespace(n) {
 	});
 	return a;
 }
-
-'use strict';
-
-var unitbezier = UnitBezier;
-
-function UnitBezier(p1x, p1y, p2x, p2y) {
-    // Calculate the polynomial coefficients, implicit first and last control points are (0,0) and (1,1).
-    this.cx = 3.0 * p1x;
-    this.bx = 3.0 * (p2x - p1x) - this.cx;
-    this.ax = 1.0 - this.cx - this.bx;
-
-    this.cy = 3.0 * p1y;
-    this.by = 3.0 * (p2y - p1y) - this.cy;
-    this.ay = 1.0 - this.cy - this.by;
-
-    this.p1x = p1x;
-    this.p1y = p1y;
-    this.p2x = p2x;
-    this.p2y = p2y;
-}
-
-UnitBezier.prototype = {
-    sampleCurveX: function (t) {
-        // `ax t^3 + bx t^2 + cx t' expanded using Horner's rule.
-        return ((this.ax * t + this.bx) * t + this.cx) * t;
-    },
-
-    sampleCurveY: function (t) {
-        return ((this.ay * t + this.by) * t + this.cy) * t;
-    },
-
-    sampleCurveDerivativeX: function (t) {
-        return (3.0 * this.ax * t + 2.0 * this.bx) * t + this.cx;
-    },
-
-    solveCurveX: function (x, epsilon) {
-        if (epsilon === undefined) epsilon = 1e-6;
-
-        if (x < 0.0) return 0.0;
-        if (x > 1.0) return 1.0;
-
-        var t = x;
-
-        // First try a few iterations of Newton's method - normally very fast.
-        for (var i = 0; i < 8; i++) {
-            var x2 = this.sampleCurveX(t) - x;
-            if (Math.abs(x2) < epsilon) return t;
-
-            var d2 = this.sampleCurveDerivativeX(t);
-            if (Math.abs(d2) < 1e-6) break;
-
-            t = t - x2 / d2;
-        }
-
-        // Fall back to the bisection method for reliability.
-        var t0 = 0.0;
-        var t1 = 1.0;
-        t = x;
-
-        for (i = 0; i < 20; i++) {
-            x2 = this.sampleCurveX(t);
-            if (Math.abs(x2 - x) < epsilon) break;
-
-            if (x > x2) {
-                t0 = t;
-            } else {
-                t1 = t;
-            }
-
-            t = (t1 - t0) * 0.5 + t0;
-        }
-
-        return t;
-    },
-
-    solve: function (x, epsilon) {
-        return this.sampleCurveY(this.solveCurveX(x, epsilon));
-    }
-};
-
-/**
- * Deeply compares two object literals.
- *
- * @private
- */
-function deepEqual(a, b) {
-    if (Array.isArray(a)) {
-        if (!Array.isArray(b) || a.length !== b.length)
-            return false;
-        for (let i = 0; i < a.length; i++) {
-            if (!deepEqual(a[i], b[i]))
-                return false;
-        }
-        return true;
-    }
-    if (typeof a === 'object' && a !== null && b !== null) {
-        if (!(typeof b === 'object'))
-            return false;
-        const keys = Object.keys(a);
-        if (keys.length !== Object.keys(b).length)
-            return false;
-        for (const key in a) {
-            if (!deepEqual(a[key], b[key]))
-                return false;
-        }
-        return true;
-    }
-    return a === b;
-}
-
-/**
- * @module util
- * @private
- */
-/**
- * Given a value `t` that varies between 0 and 1, return
- * an interpolation function that eases between 0 and 1 in a pleasing
- * cubic in-out fashion.
- *
- * @private
- */
-function easeCubicInOut(t) {
-    if (t <= 0)
-        return 0;
-    if (t >= 1)
-        return 1;
-    const t2 = t * t, t3 = t2 * t;
-    return 4 * (t < 0.5 ? t3 : 3 * (t - t2) + t3 - 0.75);
-}
-/**
- * Given given (x, y), (x1, y1) control points for a bezier curve,
- * return a function that interpolates along that curve.
- *
- * @param p1x control point 1 x coordinate
- * @param p1y control point 1 y coordinate
- * @param p2x control point 2 x coordinate
- * @param p2y control point 2 y coordinate
- * @private
- */
-function bezier$1(p1x, p1y, p2x, p2y) {
-    const bezier = new unitbezier(p1x, p1y, p2x, p2y);
-    return function (t) {
-        return bezier.solve(t);
-    };
-}
-/**
- * A default bezier-curve powered easing function with
- * control points (0.25, 0.1) and (0.25, 1)
- *
- * @private
- */
-const ease = bezier$1(0.25, 0.1, 0.25, 1);
-/**
- * constrain n to the given range via min + max
- *
- * @param n value
- * @param min the minimum value to be returned
- * @param max the maximum value to be returned
- * @returns the clamped value
- * @private
- */
-function clamp(n, min, max) {
-    return Math.min(max, Math.max(min, n));
-}
-/**
- * constrain n to the given range, excluding the minimum, via modular arithmetic
- *
- * @param n value
- * @param min the minimum value to be returned, exclusive
- * @param max the maximum value to be returned, inclusive
- * @returns constrained number
- * @private
- */
-function wrap(n, min, max) {
-    const d = max - min;
-    const w = ((n - min) % d + d) % d + min;
-    return (w === min) ? max : w;
-}
-/*
- * Call an asynchronous function on an array of arguments,
- * calling `callback` with the completed results of all calls.
- *
- * @param array input to each call of the async function.
- * @param fn an async function with signature (data, callback)
- * @param callback a callback run after all async work is done.
- * called with an array, containing the results of each async call.
- * @private
- */
-function asyncAll(array, fn, callback) {
-    if (!array.length) {
-        return callback(null, []);
-    }
-    let remaining = array.length;
-    const results = new Array(array.length);
-    let error = null;
-    array.forEach((item, i) => {
-        fn(item, (err, result) => {
-            if (err)
-                error = err;
-            results[i] = result; // https://github.com/facebook/flow/issues/2123
-            if (--remaining === 0)
-                callback(error, results);
-        });
-    });
-}
-/*
- * Compute the difference between the keys in one object and the keys
- * in another object.
- *
- * @returns keys difference
- * @private
- */
-function keysDifference(obj, other) {
-    const difference = [];
-    for (const i in obj) {
-        if (!(i in other)) {
-            difference.push(i);
-        }
-    }
-    return difference;
-}
-/**
- * Given a destination object and optionally many source objects,
- * copy all properties from the source objects into the destination.
- * The last source object given overrides properties from previous
- * source objects.
- *
- * @param dest destination object
- * @param sources sources from which properties are pulled
- * @private
- */
-function extend(dest, ...sources) {
-    for (const src of sources) {
-        for (const k in src) {
-            dest[k] = src[k];
-        }
-    }
-    return dest;
-}
-/**
- * Given an object and a number of properties as strings, return version
- * of that object with only those properties.
- *
- * @param src the object
- * @param properties an array of property names chosen
- * to appear on the resulting object.
- * @returns object with limited properties.
- * @example
- * var foo = { name: 'Charlie', age: 10 };
- * var justName = pick(foo, ['name']);
- * // justName = { name: 'Charlie' }
- * @private
- */
-function pick(src, properties) {
-    const result = {};
-    for (let i = 0; i < properties.length; i++) {
-        const k = properties[i];
-        if (k in src) {
-            result[k] = src[k];
-        }
-    }
-    return result;
-}
-let id = 1;
-/**
- * Return a unique numeric id, starting at 1 and incrementing with
- * each call.
- *
- * @returns unique numeric id.
- * @private
- */
-function uniqueId() {
-    return id++;
-}
-/**
- * Return whether a given value is a power of two
- * @private
- */
-function isPowerOfTwo(value) {
-    return (Math.log(value) / Math.LN2) % 1 === 0;
-}
-/**
- * Return the next power of two, or the input value if already a power of two
- * @private
- */
-function nextPowerOfTwo(value) {
-    if (value <= 1)
-        return 1;
-    return Math.pow(2, Math.ceil(Math.log(value) / Math.LN2));
-}
-/**
- * Given an array of member function names as strings, replace all of them
- * with bound versions that will always refer to `context` as `this`. This
- * is useful for classes where otherwise event bindings would reassign
- * `this` to the evented object or some other value: this lets you ensure
- * the `this` value always.
- *
- * @param fns list of member function names
- * @param context the context value
- * @example
- * function MyClass() {
- *   bindAll(['ontimer'], this);
- *   this.name = 'Tom';
- * }
- * MyClass.prototype.ontimer = function() {
- *   alert(this.name);
- * };
- * var myClass = new MyClass();
- * setTimeout(myClass.ontimer, 100);
- * @private
- */
-function bindAll(fns, context) {
-    fns.forEach((fn) => {
-        if (!context[fn]) {
-            return;
-        }
-        context[fn] = context[fn].bind(context);
-    });
-}
-/**
- * Create an object by mapping all the values of an existing object while
- * preserving their keys.
- *
- * @private
- */
-function mapObject(input, iterator, context) {
-    const output = {};
-    for (const key in input) {
-        output[key] = iterator.call(context || this, input[key], key, input);
-    }
-    return output;
-}
-/**
- * Create an object by filtering out values of an existing object.
- *
- * @private
- */
-function filterObject(input, iterator, context) {
-    const output = {};
-    for (const key in input) {
-        if (iterator.call(context || this, input[key], key, input)) {
-            output[key] = input[key];
-        }
-    }
-    return output;
-}
-/**
- * Deeply clones two objects.
- *
- * @private
- */
-function clone$9(input) {
-    if (Array.isArray(input)) {
-        return input.map(clone$9);
-    }
-    else if (typeof input === 'object' && input) {
-        return mapObject(input, clone$9);
-    }
-    else {
-        return input;
-    }
-}
-/**
- * Check if two arrays have at least one common element.
- *
- * @private
- */
-function arraysIntersect(a, b) {
-    for (let l = 0; l < a.length; l++) {
-        if (b.indexOf(a[l]) >= 0)
-            return true;
-    }
-    return false;
-}
-/**
- * Print a warning message to the console and ensure duplicate warning messages
- * are not printed.
- *
- * @private
- */
-const warnOnceHistory = {};
-function warnOnce(message) {
-    if (!warnOnceHistory[message]) {
-        // console isn't defined in some WebWorkers, see #2558
-        if (typeof console !== 'undefined')
-            console.warn(message);
-        warnOnceHistory[message] = true;
-    }
-}
-/**
- * Indicates if the provided Points are in a counter clockwise (true) or clockwise (false) order
- *
- * @private
- * @returns true for a counter clockwise set of points
- */
-// http://bryceboe.com/2006/10/23/line-segment-intersection-algorithm/
-function isCounterClockwise(a, b, c) {
-    return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
-}
-/**
- * Returns the signed area for the polygon ring.  Positive areas are exterior rings and
- * have a clockwise winding.  Negative areas are interior rings and have a counter clockwise
- * ordering.
- *
- * @private
- * @param ring Exterior or interior ring
- */
-function calculateSignedArea(ring) {
-    let sum = 0;
-    for (let i = 0, len = ring.length, j = len - 1, p1, p2; i < len; j = i++) {
-        p1 = ring[i];
-        p2 = ring[j];
-        sum += (p2.x - p1.x) * (p1.y + p2.y);
-    }
-    return sum;
-}
-/**
- * Detects closed polygons, first + last point are equal
- *
- * @private
- * @param points array of points
- * @return true if the points are a closed polygon
- */
-function isClosedPolygon(points) {
-    // If it is 2 points that are the same then it is a point
-    // If it is 3 points with start and end the same then it is a line
-    if (points.length < 4)
-        return false;
-    const p1 = points[0];
-    const p2 = points[points.length - 1];
-    if (Math.abs(p1.x - p2.x) > 0 ||
-        Math.abs(p1.y - p2.y) > 0) {
-        return false;
-    }
-    // polygon simplification can produce polygons with zero area and more than 3 points
-    return Math.abs(calculateSignedArea(points)) > 0.01;
-}
-/**
- * Converts spherical coordinates to cartesian coordinates.
- *
- * @private
- * @param spherical Spherical coordinates, in [radial, azimuthal, polar]
- * @return cartesian coordinates in [x, y, z]
- */
-function sphericalToCartesian([r, azimuthal, polar]) {
-    // We abstract "north"/"up" (compass-wise) to be 0° when really this is 90° (π/2):
-    // correct for that here
-    azimuthal += 90;
-    // Convert azimuthal and polar angles to radians
-    azimuthal *= Math.PI / 180;
-    polar *= Math.PI / 180;
-    return {
-        x: r * Math.cos(azimuthal) * Math.sin(polar),
-        y: r * Math.sin(azimuthal) * Math.sin(polar),
-        z: r * Math.cos(polar)
-    };
-}
-/**
- *  Returns true if the when run in the web-worker context.
- *
- * @private
- * @returns {boolean}
- */
-function isWorker() {
-    // @ts-ignore
-    return typeof WorkerGlobalScope !== 'undefined' && typeof self !== 'undefined' && self instanceof WorkerGlobalScope;
-}
-/**
- * Parses data from 'Cache-Control' headers.
- *
- * @private
- * @param cacheControl Value of 'Cache-Control' header
- * @return object containing parsed header info.
- */
-function parseCacheControl(cacheControl) {
-    // Taken from [Wreck](https://github.com/hapijs/wreck)
-    const re = /(?:^|(?:\s*\,\s*))([^\x00-\x20\(\)<>@\,;\:\\"\/\[\]\?\=\{\}\x7F]+)(?:\=(?:([^\x00-\x20\(\)<>@\,;\:\\"\/\[\]\?\=\{\}\x7F]+)|(?:\"((?:[^"\\]|\\.)*)\")))?/g;
-    const header = {};
-    cacheControl.replace(re, ($0, $1, $2, $3) => {
-        const value = $2 || $3;
-        header[$1] = value ? value.toLowerCase() : true;
-        return '';
-    });
-    if (header['max-age']) {
-        const maxAge = parseInt(header['max-age'], 10);
-        if (isNaN(maxAge))
-            delete header['max-age'];
-        else
-            header['max-age'] = maxAge;
-    }
-    return header;
-}
-let _isSafari = null;
-/**
- * Returns true when run in WebKit derived browsers.
- * This is used as a workaround for a memory leak in Safari caused by using Transferable objects to
- * transfer data between WebWorkers and the main thread.
- * https://github.com/mapbox/mapbox-gl-js/issues/8771
- *
- * This should be removed once the underlying Safari issue is fixed.
- *
- * @private
- * @param scope {WindowOrWorkerGlobalScope} Since this function is used both on the main thread and WebWorker context,
- *      let the calling scope pass in the global scope object.
- * @returns {boolean}
- */
-function isSafari(scope) {
-    if (_isSafari == null) {
-        const userAgent = scope.navigator ? scope.navigator.userAgent : null;
-        _isSafari = !!scope.safari ||
-            !!(userAgent && (/\b(iPad|iPhone|iPod)\b/.test(userAgent) || (!!userAgent.match('Safari') && !userAgent.match('Chrome'))));
-    }
-    return _isSafari;
-}
-function storageAvailable(type) {
-    try {
-        const storage = window[type];
-        storage.setItem('_mapbox_test_', 1);
-        storage.removeItem('_mapbox_test_');
-        return true;
-    }
-    catch (e) {
-        return false;
-    }
-}
-// The following methods are from https://developer.mozilla.org/en-US/docs/Web/API/WindowBase64/Base64_encoding_and_decoding#The_Unicode_Problem
-//Unicode compliant base64 encoder for strings
-function b64EncodeUnicode(str) {
-    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
-        return String.fromCharCode(Number('0x' + p1)); //eslint-disable-line
-    }));
-}
-// Unicode compliant decoder for base64-encoded strings
-function b64DecodeUnicode(str) {
-    return decodeURIComponent(atob(str).split('').map((c) => {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); //eslint-disable-line
-    }).join(''));
-}
-function isImageBitmap(image) {
-    return typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap;
-}
-/**
- * Converts an ArrayBuffer to an ImageBitmap.
- *
- * Used mostly for testing purposes only, because mocking libs don't know how to work with ArrayBuffers, but work
- * perfectly fine with ImageBitmaps. Might also be used for environments (other than testing) not supporting
- * ArrayBuffers.
- *
- * @param data {ArrayBuffer} Data to convert
- * @param callback A callback executed after the conversion is finished. Invoked with error (if any) as the first argument and resulting image bitmap (when no error) as the second
- */
-function arrayBufferToImageBitmap(data, callback) {
-    const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
-    createImageBitmap(blob).then((imgBitmap) => {
-        callback(null, imgBitmap);
-    }).catch((e) => {
-        callback(new Error(`Could not load image because of ${e.message}. Please make sure to use a supported image type such as PNG or JPEG. Note that SVGs are not supported.`));
-    });
-}
-const transparentPngUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQYV2NgAAIAAAUAAarVyFEAAAAASUVORK5CYII=';
-/**
- * Converts an ArrayBuffer to an HTMLImageElement.
- *
- * Used mostly for testing purposes only, because mocking libs don't know how to work with ArrayBuffers, but work
- * perfectly fine with ImageBitmaps. Might also be used for environments (other than testing) not supporting
- * ArrayBuffers.
- *
- * @param data {ArrayBuffer} Data to convert
- * @param callback A callback executed after the conversion is finished. Invoked with error (if any) as the first argument and resulting image element (when no error) as the second
- */
-function arrayBufferToImage(data, callback) {
-    const img = new Image();
-    img.onload = () => {
-        callback(null, img);
-        URL.revokeObjectURL(img.src);
-        // prevent image dataURI memory leak in Safari;
-        // but don't free the image immediately because it might be uploaded in the next frame
-        // https://github.com/mapbox/mapbox-gl-js/issues/10226
-        img.onload = null;
-        window.requestAnimationFrame(() => { img.src = transparentPngUrl; });
-    };
-    img.onerror = () => callback(new Error('Could not load image. Please make sure to use a supported image type such as PNG or JPEG. Note that SVGs are not supported.'));
-    const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
-    img.src = data.byteLength ? URL.createObjectURL(blob) : transparentPngUrl;
-}
-
-const now = typeof performance !== 'undefined' && performance && performance.now ?
-    performance.now.bind(performance) :
-    Date.now.bind(Date);
-let linkEl;
-let reducedMotionQuery;
-/**
- * @private
- */
-const exported = {
-    /**
-     * Provides a function that outputs milliseconds: either performance.now()
-     * or a fallback to Date.now()
-     */
-    now,
-    frame(fn) {
-        const frame = requestAnimationFrame(fn);
-        return { cancel: () => cancelAnimationFrame(frame) };
-    },
-    getImageData(img, padding = 0) {
-        const context = this.getImageCanvasContext(img);
-        return context.getImageData(-padding, -padding, img.width + 2 * padding, img.height + 2 * padding);
-    },
-    getImageCanvasContext(img) {
-        const canvas = window.document.createElement('canvas');
-        const context = canvas.getContext('2d', { willReadFrequently: true });
-        if (!context) {
-            throw new Error('failed to create canvas 2d context');
-        }
-        canvas.width = img.width;
-        canvas.height = img.height;
-        context.drawImage(img, 0, 0, img.width, img.height);
-        return context;
-    },
-    resolveURL(path) {
-        if (!linkEl)
-            linkEl = document.createElement('a');
-        linkEl.href = path;
-        return linkEl.href;
-    },
-    hardwareConcurrency: typeof navigator !== 'undefined' && navigator.hardwareConcurrency || 4,
-    get prefersReducedMotion() {
-        // In case your test crashes when checking matchMedia, call setMatchMedia from 'src/util/test/util'
-        if (!matchMedia)
-            return false;
-        //Lazily initialize media query
-        if (reducedMotionQuery == null) {
-            reducedMotionQuery = matchMedia('(prefers-reduced-motion: reduce)');
-        }
-        return reducedMotionQuery.matches;
-    },
-};
 
 'use strict';
 
@@ -1022,10 +385,679 @@ Point$1.convert = function (a) {
     return a;
 };
 
+var Point$2 = /*@__PURE__*/getDefaultExportFromCjs(pointGeometry);
+
+'use strict';
+
+var unitbezier = UnitBezier;
+
+function UnitBezier(p1x, p1y, p2x, p2y) {
+    // Calculate the polynomial coefficients, implicit first and last control points are (0,0) and (1,1).
+    this.cx = 3.0 * p1x;
+    this.bx = 3.0 * (p2x - p1x) - this.cx;
+    this.ax = 1.0 - this.cx - this.bx;
+
+    this.cy = 3.0 * p1y;
+    this.by = 3.0 * (p2y - p1y) - this.cy;
+    this.ay = 1.0 - this.cy - this.by;
+
+    this.p1x = p1x;
+    this.p1y = p1y;
+    this.p2x = p2x;
+    this.p2y = p2y;
+}
+
+UnitBezier.prototype = {
+    sampleCurveX: function (t) {
+        // `ax t^3 + bx t^2 + cx t' expanded using Horner's rule.
+        return ((this.ax * t + this.bx) * t + this.cx) * t;
+    },
+
+    sampleCurveY: function (t) {
+        return ((this.ay * t + this.by) * t + this.cy) * t;
+    },
+
+    sampleCurveDerivativeX: function (t) {
+        return (3.0 * this.ax * t + 2.0 * this.bx) * t + this.cx;
+    },
+
+    solveCurveX: function (x, epsilon) {
+        if (epsilon === undefined) epsilon = 1e-6;
+
+        if (x < 0.0) return 0.0;
+        if (x > 1.0) return 1.0;
+
+        var t = x;
+
+        // First try a few iterations of Newton's method - normally very fast.
+        for (var i = 0; i < 8; i++) {
+            var x2 = this.sampleCurveX(t) - x;
+            if (Math.abs(x2) < epsilon) return t;
+
+            var d2 = this.sampleCurveDerivativeX(t);
+            if (Math.abs(d2) < 1e-6) break;
+
+            t = t - x2 / d2;
+        }
+
+        // Fall back to the bisection method for reliability.
+        var t0 = 0.0;
+        var t1 = 1.0;
+        t = x;
+
+        for (i = 0; i < 20; i++) {
+            x2 = this.sampleCurveX(t);
+            if (Math.abs(x2 - x) < epsilon) break;
+
+            if (x > x2) {
+                t0 = t;
+            } else {
+                t1 = t;
+            }
+
+            t = (t1 - t0) * 0.5 + t0;
+        }
+
+        return t;
+    },
+
+    solve: function (x, epsilon) {
+        return this.sampleCurveY(this.solveCurveX(x, epsilon));
+    }
+};
+
+var UnitBezier$1 = /*@__PURE__*/getDefaultExportFromCjs(unitbezier);
+
+/**
+ * @module util
+ * @private
+ */
+/**
+ * Given a value `t` that varies between 0 and 1, return
+ * an interpolation function that eases between 0 and 1 in a pleasing
+ * cubic in-out fashion.
+ *
+ * @private
+ */
+function easeCubicInOut(t) {
+    if (t <= 0)
+        return 0;
+    if (t >= 1)
+        return 1;
+    const t2 = t * t, t3 = t2 * t;
+    return 4 * (t < 0.5 ? t3 : 3 * (t - t2) + t3 - 0.75);
+}
+/**
+ * Given given (x, y), (x1, y1) control points for a bezier curve,
+ * return a function that interpolates along that curve.
+ *
+ * @param p1x control point 1 x coordinate
+ * @param p1y control point 1 y coordinate
+ * @param p2x control point 2 x coordinate
+ * @param p2y control point 2 y coordinate
+ * @private
+ */
+function bezier$1(p1x, p1y, p2x, p2y) {
+    const bezier = new UnitBezier$1(p1x, p1y, p2x, p2y);
+    return function (t) {
+        return bezier.solve(t);
+    };
+}
+/**
+ * A default bezier-curve powered easing function with
+ * control points (0.25, 0.1) and (0.25, 1)
+ *
+ * @private
+ */
+const ease = bezier$1(0.25, 0.1, 0.25, 1);
+/**
+ * constrain n to the given range via min + max
+ *
+ * @param n value
+ * @param min the minimum value to be returned
+ * @param max the maximum value to be returned
+ * @returns the clamped value
+ * @private
+ */
+function clamp$1(n, min, max) {
+    return Math.min(max, Math.max(min, n));
+}
+/**
+ * constrain n to the given range, excluding the minimum, via modular arithmetic
+ *
+ * @param n value
+ * @param min the minimum value to be returned, exclusive
+ * @param max the maximum value to be returned, inclusive
+ * @returns constrained number
+ * @private
+ */
+function wrap(n, min, max) {
+    const d = max - min;
+    const w = ((n - min) % d + d) % d + min;
+    return (w === min) ? max : w;
+}
+/*
+ * Call an asynchronous function on an array of arguments,
+ * calling `callback` with the completed results of all calls.
+ *
+ * @param array input to each call of the async function.
+ * @param fn an async function with signature (data, callback)
+ * @param callback a callback run after all async work is done.
+ * called with an array, containing the results of each async call.
+ * @private
+ */
+function asyncAll(array, fn, callback) {
+    if (!array.length) {
+        return callback(null, []);
+    }
+    let remaining = array.length;
+    const results = new Array(array.length);
+    let error = null;
+    array.forEach((item, i) => {
+        fn(item, (err, result) => {
+            if (err)
+                error = err;
+            results[i] = result; // https://github.com/facebook/flow/issues/2123
+            if (--remaining === 0)
+                callback(error, results);
+        });
+    });
+}
+/*
+ * Compute the difference between the keys in one object and the keys
+ * in another object.
+ *
+ * @returns keys difference
+ * @private
+ */
+function keysDifference(obj, other) {
+    const difference = [];
+    for (const i in obj) {
+        if (!(i in other)) {
+            difference.push(i);
+        }
+    }
+    return difference;
+}
+/**
+ * Given a destination object and optionally many source objects,
+ * copy all properties from the source objects into the destination.
+ * The last source object given overrides properties from previous
+ * source objects.
+ *
+ * @param dest destination object
+ * @param sources sources from which properties are pulled
+ * @private
+ */
+function extend(dest, ...sources) {
+    for (const src of sources) {
+        for (const k in src) {
+            dest[k] = src[k];
+        }
+    }
+    return dest;
+}
+/**
+ * Given an object and a number of properties as strings, return version
+ * of that object with only those properties.
+ *
+ * @param src the object
+ * @param properties an array of property names chosen
+ * to appear on the resulting object.
+ * @returns object with limited properties.
+ * @example
+ * var foo = { name: 'Charlie', age: 10 };
+ * var justName = pick(foo, ['name']);
+ * // justName = { name: 'Charlie' }
+ * @private
+ */
+function pick(src, properties) {
+    const result = {};
+    for (let i = 0; i < properties.length; i++) {
+        const k = properties[i];
+        if (k in src) {
+            result[k] = src[k];
+        }
+    }
+    return result;
+}
+let id = 1;
+/**
+ * Return a unique numeric id, starting at 1 and incrementing with
+ * each call.
+ *
+ * @returns unique numeric id.
+ * @private
+ */
+function uniqueId() {
+    return id++;
+}
+/**
+ * Return whether a given value is a power of two
+ * @private
+ */
+function isPowerOfTwo(value) {
+    return (Math.log(value) / Math.LN2) % 1 === 0;
+}
+/**
+ * Return the next power of two, or the input value if already a power of two
+ * @private
+ */
+function nextPowerOfTwo(value) {
+    if (value <= 1)
+        return 1;
+    return Math.pow(2, Math.ceil(Math.log(value) / Math.LN2));
+}
+/**
+ * Given an array of member function names as strings, replace all of them
+ * with bound versions that will always refer to `context` as `this`. This
+ * is useful for classes where otherwise event bindings would reassign
+ * `this` to the evented object or some other value: this lets you ensure
+ * the `this` value always.
+ *
+ * @param fns list of member function names
+ * @param context the context value
+ * @example
+ * function MyClass() {
+ *   bindAll(['ontimer'], this);
+ *   this.name = 'Tom';
+ * }
+ * MyClass.prototype.ontimer = function() {
+ *   alert(this.name);
+ * };
+ * var myClass = new MyClass();
+ * setTimeout(myClass.ontimer, 100);
+ * @private
+ */
+function bindAll(fns, context) {
+    fns.forEach((fn) => {
+        if (!context[fn]) {
+            return;
+        }
+        context[fn] = context[fn].bind(context);
+    });
+}
+/**
+ * Create an object by mapping all the values of an existing object while
+ * preserving their keys.
+ *
+ * @private
+ */
+function mapObject(input, iterator, context) {
+    const output = {};
+    for (const key in input) {
+        output[key] = iterator.call(context || this, input[key], key, input);
+    }
+    return output;
+}
+/**
+ * Create an object by filtering out values of an existing object.
+ *
+ * @private
+ */
+function filterObject(input, iterator, context) {
+    const output = {};
+    for (const key in input) {
+        if (iterator.call(context || this, input[key], key, input)) {
+            output[key] = input[key];
+        }
+    }
+    return output;
+}
+/**
+ * Deeply compares two object literals.
+ * @param a first object literal to be compared
+ * @param b second object literal to be compared
+ * @returns true if the two object literals are deeply equal, false otherwise
+ */
+function deepEqual$1(a, b) {
+    if (Array.isArray(a)) {
+        if (!Array.isArray(b) || a.length !== b.length)
+            return false;
+        for (let i = 0; i < a.length; i++) {
+            if (!deepEqual$1(a[i], b[i]))
+                return false;
+        }
+        return true;
+    }
+    if (typeof a === 'object' && a !== null && b !== null) {
+        if (!(typeof b === 'object'))
+            return false;
+        const keys = Object.keys(a);
+        if (keys.length !== Object.keys(b).length)
+            return false;
+        for (const key in a) {
+            if (!deepEqual$1(a[key], b[key]))
+                return false;
+        }
+        return true;
+    }
+    return a === b;
+}
+/**
+ * Deeply clones two objects.
+ *
+ * @private
+ */
+function clone$9(input) {
+    if (Array.isArray(input)) {
+        return input.map(clone$9);
+    }
+    else if (typeof input === 'object' && input) {
+        return mapObject(input, clone$9);
+    }
+    else {
+        return input;
+    }
+}
+/**
+ * Check if two arrays have at least one common element.
+ *
+ * @private
+ */
+function arraysIntersect(a, b) {
+    for (let l = 0; l < a.length; l++) {
+        if (b.indexOf(a[l]) >= 0)
+            return true;
+    }
+    return false;
+}
+/**
+ * Print a warning message to the console and ensure duplicate warning messages
+ * are not printed.
+ *
+ * @private
+ */
+const warnOnceHistory = {};
+function warnOnce(message) {
+    if (!warnOnceHistory[message]) {
+        // console isn't defined in some WebWorkers, see #2558
+        if (typeof console !== 'undefined')
+            console.warn(message);
+        warnOnceHistory[message] = true;
+    }
+}
+/**
+ * Indicates if the provided Points are in a counter clockwise (true) or clockwise (false) order
+ *
+ * @private
+ * @returns true for a counter clockwise set of points
+ */
+// http://bryceboe.com/2006/10/23/line-segment-intersection-algorithm/
+function isCounterClockwise(a, b, c) {
+    return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
+}
+/**
+ * For two lines a and b in 2d space, defined by any two points along the lines,
+ * find the intersection point, or return null if the lines are parallel
+ *
+ * @param a1 First point on line a
+ * @param a2 Second point on line a
+ * @param b1 First point on line b
+ * @param b2 Second point on line b
+ *
+ * @returns the intersection point of the two lines or null if they are parallel
+ */
+function findLineIntersection(a1, a2, b1, b2) {
+    const aDeltaY = a2.y - a1.y;
+    const aDeltaX = a2.x - a1.x;
+    const bDeltaY = b2.y - b1.y;
+    const bDeltaX = b2.x - b1.x;
+    const denominator = (bDeltaY * aDeltaX) - (bDeltaX * aDeltaY);
+    if (denominator === 0) {
+        // Lines are parallel
+        return null;
+    }
+    const originDeltaY = a1.y - b1.y;
+    const originDeltaX = a1.x - b1.x;
+    const aInterpolation = (bDeltaX * originDeltaY - bDeltaY * originDeltaX) / denominator;
+    // Find intersection by projecting out from origin of first segment
+    return new Point$2(a1.x + (aInterpolation * aDeltaX), a1.y + (aInterpolation * aDeltaY));
+}
+/**
+ * Returns the signed area for the polygon ring.  Positive areas are exterior rings and
+ * have a clockwise winding.  Negative areas are interior rings and have a counter clockwise
+ * ordering.
+ *
+ * @private
+ * @param ring Exterior or interior ring
+ */
+function calculateSignedArea(ring) {
+    let sum = 0;
+    for (let i = 0, len = ring.length, j = len - 1, p1, p2; i < len; j = i++) {
+        p1 = ring[i];
+        p2 = ring[j];
+        sum += (p2.x - p1.x) * (p1.y + p2.y);
+    }
+    return sum;
+}
+/**
+ * Detects closed polygons, first + last point are equal
+ *
+ * @private
+ * @param points array of points
+ * @return true if the points are a closed polygon
+ */
+function isClosedPolygon(points) {
+    // If it is 2 points that are the same then it is a point
+    // If it is 3 points with start and end the same then it is a line
+    if (points.length < 4)
+        return false;
+    const p1 = points[0];
+    const p2 = points[points.length - 1];
+    if (Math.abs(p1.x - p2.x) > 0 ||
+        Math.abs(p1.y - p2.y) > 0) {
+        return false;
+    }
+    // polygon simplification can produce polygons with zero area and more than 3 points
+    return Math.abs(calculateSignedArea(points)) > 0.01;
+}
+/**
+ * Converts spherical coordinates to cartesian coordinates.
+ *
+ * @private
+ * @param spherical Spherical coordinates, in [radial, azimuthal, polar]
+ * @return cartesian coordinates in [x, y, z]
+ */
+function sphericalToCartesian([r, azimuthal, polar]) {
+    // We abstract "north"/"up" (compass-wise) to be 0° when really this is 90° (π/2):
+    // correct for that here
+    azimuthal += 90;
+    // Convert azimuthal and polar angles to radians
+    azimuthal *= Math.PI / 180;
+    polar *= Math.PI / 180;
+    return {
+        x: r * Math.cos(azimuthal) * Math.sin(polar),
+        y: r * Math.sin(azimuthal) * Math.sin(polar),
+        z: r * Math.cos(polar)
+    };
+}
+/**
+ *  Returns true if the when run in the web-worker context.
+ *
+ * @private
+ * @returns {boolean}
+ */
+function isWorker() {
+    // @ts-ignore
+    return typeof WorkerGlobalScope !== 'undefined' && typeof self !== 'undefined' && self instanceof WorkerGlobalScope;
+}
+/**
+ * Parses data from 'Cache-Control' headers.
+ *
+ * @private
+ * @param cacheControl Value of 'Cache-Control' header
+ * @return object containing parsed header info.
+ */
+function parseCacheControl(cacheControl) {
+    // Taken from [Wreck](https://github.com/hapijs/wreck)
+    const re = /(?:^|(?:\s*\,\s*))([^\x00-\x20\(\)<>@\,;\:\\"\/\[\]\?\=\{\}\x7F]+)(?:\=(?:([^\x00-\x20\(\)<>@\,;\:\\"\/\[\]\?\=\{\}\x7F]+)|(?:\"((?:[^"\\]|\\.)*)\")))?/g;
+    const header = {};
+    cacheControl.replace(re, ($0, $1, $2, $3) => {
+        const value = $2 || $3;
+        header[$1] = value ? value.toLowerCase() : true;
+        return '';
+    });
+    if (header['max-age']) {
+        const maxAge = parseInt(header['max-age'], 10);
+        if (isNaN(maxAge))
+            delete header['max-age'];
+        else
+            header['max-age'] = maxAge;
+    }
+    return header;
+}
+let _isSafari = null;
+/**
+ * Returns true when run in WebKit derived browsers.
+ * This is used as a workaround for a memory leak in Safari caused by using Transferable objects to
+ * transfer data between WebWorkers and the main thread.
+ * https://github.com/mapbox/mapbox-gl-js/issues/8771
+ *
+ * This should be removed once the underlying Safari issue is fixed.
+ *
+ * @private
+ * @param scope {WindowOrWorkerGlobalScope} Since this function is used both on the main thread and WebWorker context,
+ *      let the calling scope pass in the global scope object.
+ * @returns {boolean}
+ */
+function isSafari(scope) {
+    if (_isSafari == null) {
+        const userAgent = scope.navigator ? scope.navigator.userAgent : null;
+        _isSafari = !!scope.safari ||
+            !!(userAgent && (/\b(iPad|iPhone|iPod)\b/.test(userAgent) || (!!userAgent.match('Safari') && !userAgent.match('Chrome'))));
+    }
+    return _isSafari;
+}
+function storageAvailable(type) {
+    try {
+        const storage = window[type];
+        storage.setItem('_mapbox_test_', 1);
+        storage.removeItem('_mapbox_test_');
+        return true;
+    }
+    catch (e) {
+        return false;
+    }
+}
+// The following methods are from https://developer.mozilla.org/en-US/docs/Web/API/WindowBase64/Base64_encoding_and_decoding#The_Unicode_Problem
+//Unicode compliant base64 encoder for strings
+function b64EncodeUnicode(str) {
+    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+        return String.fromCharCode(Number('0x' + p1)); //eslint-disable-line
+    }));
+}
+// Unicode compliant decoder for base64-encoded strings
+function b64DecodeUnicode(str) {
+    return decodeURIComponent(atob(str).split('').map((c) => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); //eslint-disable-line
+    }).join(''));
+}
+function isImageBitmap(image) {
+    return typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap;
+}
+/**
+ * Converts an ArrayBuffer to an ImageBitmap.
+ *
+ * Used mostly for testing purposes only, because mocking libs don't know how to work with ArrayBuffers, but work
+ * perfectly fine with ImageBitmaps. Might also be used for environments (other than testing) not supporting
+ * ArrayBuffers.
+ *
+ * @param data {ArrayBuffer} Data to convert
+ * @param callback A callback executed after the conversion is finished. Invoked with error (if any) as the first argument and resulting image bitmap (when no error) as the second
+ */
+function arrayBufferToImageBitmap(data, callback) {
+    const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
+    createImageBitmap(blob).then((imgBitmap) => {
+        callback(null, imgBitmap);
+    }).catch((e) => {
+        callback(new Error(`Could not load image because of ${e.message}. Please make sure to use a supported image type such as PNG or JPEG. Note that SVGs are not supported.`));
+    });
+}
+const transparentPngUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQYV2NgAAIAAAUAAarVyFEAAAAASUVORK5CYII=';
+/**
+ * Converts an ArrayBuffer to an HTMLImageElement.
+ *
+ * Used mostly for testing purposes only, because mocking libs don't know how to work with ArrayBuffers, but work
+ * perfectly fine with ImageBitmaps. Might also be used for environments (other than testing) not supporting
+ * ArrayBuffers.
+ *
+ * @param data {ArrayBuffer} Data to convert
+ * @param callback A callback executed after the conversion is finished. Invoked with error (if any) as the first argument and resulting image element (when no error) as the second
+ */
+function arrayBufferToImage(data, callback) {
+    const img = new Image();
+    img.onload = () => {
+        callback(null, img);
+        URL.revokeObjectURL(img.src);
+        // prevent image dataURI memory leak in Safari;
+        // but don't free the image immediately because it might be uploaded in the next frame
+        // https://github.com/mapbox/mapbox-gl-js/issues/10226
+        img.onload = null;
+        window.requestAnimationFrame(() => { img.src = transparentPngUrl; });
+    };
+    img.onerror = () => callback(new Error('Could not load image. Please make sure to use a supported image type such as PNG or JPEG. Note that SVGs are not supported.'));
+    const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
+    img.src = data.byteLength ? URL.createObjectURL(blob) : transparentPngUrl;
+}
+
+const now = typeof performance !== 'undefined' && performance && performance.now ?
+    performance.now.bind(performance) :
+    Date.now.bind(Date);
+let linkEl;
+let reducedMotionQuery;
+/**
+ * @private
+ */
+const exported = {
+    /**
+     * Provides a function that outputs milliseconds: either performance.now()
+     * or a fallback to Date.now()
+     */
+    now,
+    frame(fn) {
+        const frame = requestAnimationFrame(fn);
+        return { cancel: () => cancelAnimationFrame(frame) };
+    },
+    getImageData(img, padding = 0) {
+        const context = this.getImageCanvasContext(img);
+        return context.getImageData(-padding, -padding, img.width + 2 * padding, img.height + 2 * padding);
+    },
+    getImageCanvasContext(img) {
+        const canvas = window.document.createElement('canvas');
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) {
+            throw new Error('failed to create canvas 2d context');
+        }
+        canvas.width = img.width;
+        canvas.height = img.height;
+        context.drawImage(img, 0, 0, img.width, img.height);
+        return context;
+    },
+    resolveURL(path) {
+        if (!linkEl)
+            linkEl = document.createElement('a');
+        linkEl.href = path;
+        return linkEl.href;
+    },
+    hardwareConcurrency: typeof navigator !== 'undefined' && navigator.hardwareConcurrency || 4,
+    get prefersReducedMotion() {
+        // In case your test crashes when checking matchMedia, call setMatchMedia from 'src/util/test/util'
+        if (!matchMedia)
+            return false;
+        //Lazily initialize media query
+        if (reducedMotionQuery == null) {
+            reducedMotionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+        }
+        return reducedMotionQuery.matches;
+    },
+};
+
 const config = {
     MAX_PARALLEL_IMAGE_REQUESTS: 16,
     MAX_PARALLEL_IMAGE_REQUESTS_PER_FRAME: 8,
     REGISTERED_PROTOCOLS: {},
+    WORKER_URL: ''
 };
 
 /**
@@ -1105,7 +1137,7 @@ function makeFetchRequest(requestParameters, callback) {
         });
     };
     const finishRequest = (response) => {
-        (requestParameters.type === 'arrayBuffer' ? response.arrayBuffer() :
+        ((requestParameters.type === 'arrayBuffer' || requestParameters.type === 'image') ? response.arrayBuffer() :
             requestParameters.type === 'json' ? response.json() :
                 response.text()).then(result => {
             if (aborted)
@@ -1127,7 +1159,7 @@ function makeFetchRequest(requestParameters, callback) {
 function makeXMLHttpRequest(requestParameters, callback) {
     const xhr = new XMLHttpRequest();
     xhr.open(requestParameters.method || 'GET', requestParameters.url, true);
-    if (requestParameters.type === 'arrayBuffer') {
+    if (requestParameters.type === 'arrayBuffer' || requestParameters.type === 'image') {
         xhr.responseType = 'arraybuffer';
     }
     for (const k in requestParameters.headers) {
@@ -1260,8 +1292,8 @@ class Evented {
      *
      * @param {string} type The event type to add a listen for.
      * @param {Function} listener The function to be called when the event is fired.
-     *   The listener function is called with the data object passed to `fire`,
-     *   extended with `target` and `type` properties.
+     * The listener function is called with the data object passed to `fire`,
+     * extended with `target` and `type` properties.
      * @returns {Object} `this`
      */
     on(type, listener) {
@@ -1356,6 +1388,460 @@ class Evented {
         return this;
     }
 }
+
+var colorString$2 = {exports: {}};
+
+'use strict';
+
+var colorName = {
+	"aliceblue": [240, 248, 255],
+	"antiquewhite": [250, 235, 215],
+	"aqua": [0, 255, 255],
+	"aquamarine": [127, 255, 212],
+	"azure": [240, 255, 255],
+	"beige": [245, 245, 220],
+	"bisque": [255, 228, 196],
+	"black": [0, 0, 0],
+	"blanchedalmond": [255, 235, 205],
+	"blue": [0, 0, 255],
+	"blueviolet": [138, 43, 226],
+	"brown": [165, 42, 42],
+	"burlywood": [222, 184, 135],
+	"cadetblue": [95, 158, 160],
+	"chartreuse": [127, 255, 0],
+	"chocolate": [210, 105, 30],
+	"coral": [255, 127, 80],
+	"cornflowerblue": [100, 149, 237],
+	"cornsilk": [255, 248, 220],
+	"crimson": [220, 20, 60],
+	"cyan": [0, 255, 255],
+	"darkblue": [0, 0, 139],
+	"darkcyan": [0, 139, 139],
+	"darkgoldenrod": [184, 134, 11],
+	"darkgray": [169, 169, 169],
+	"darkgreen": [0, 100, 0],
+	"darkgrey": [169, 169, 169],
+	"darkkhaki": [189, 183, 107],
+	"darkmagenta": [139, 0, 139],
+	"darkolivegreen": [85, 107, 47],
+	"darkorange": [255, 140, 0],
+	"darkorchid": [153, 50, 204],
+	"darkred": [139, 0, 0],
+	"darksalmon": [233, 150, 122],
+	"darkseagreen": [143, 188, 143],
+	"darkslateblue": [72, 61, 139],
+	"darkslategray": [47, 79, 79],
+	"darkslategrey": [47, 79, 79],
+	"darkturquoise": [0, 206, 209],
+	"darkviolet": [148, 0, 211],
+	"deeppink": [255, 20, 147],
+	"deepskyblue": [0, 191, 255],
+	"dimgray": [105, 105, 105],
+	"dimgrey": [105, 105, 105],
+	"dodgerblue": [30, 144, 255],
+	"firebrick": [178, 34, 34],
+	"floralwhite": [255, 250, 240],
+	"forestgreen": [34, 139, 34],
+	"fuchsia": [255, 0, 255],
+	"gainsboro": [220, 220, 220],
+	"ghostwhite": [248, 248, 255],
+	"gold": [255, 215, 0],
+	"goldenrod": [218, 165, 32],
+	"gray": [128, 128, 128],
+	"green": [0, 128, 0],
+	"greenyellow": [173, 255, 47],
+	"grey": [128, 128, 128],
+	"honeydew": [240, 255, 240],
+	"hotpink": [255, 105, 180],
+	"indianred": [205, 92, 92],
+	"indigo": [75, 0, 130],
+	"ivory": [255, 255, 240],
+	"khaki": [240, 230, 140],
+	"lavender": [230, 230, 250],
+	"lavenderblush": [255, 240, 245],
+	"lawngreen": [124, 252, 0],
+	"lemonchiffon": [255, 250, 205],
+	"lightblue": [173, 216, 230],
+	"lightcoral": [240, 128, 128],
+	"lightcyan": [224, 255, 255],
+	"lightgoldenrodyellow": [250, 250, 210],
+	"lightgray": [211, 211, 211],
+	"lightgreen": [144, 238, 144],
+	"lightgrey": [211, 211, 211],
+	"lightpink": [255, 182, 193],
+	"lightsalmon": [255, 160, 122],
+	"lightseagreen": [32, 178, 170],
+	"lightskyblue": [135, 206, 250],
+	"lightslategray": [119, 136, 153],
+	"lightslategrey": [119, 136, 153],
+	"lightsteelblue": [176, 196, 222],
+	"lightyellow": [255, 255, 224],
+	"lime": [0, 255, 0],
+	"limegreen": [50, 205, 50],
+	"linen": [250, 240, 230],
+	"magenta": [255, 0, 255],
+	"maroon": [128, 0, 0],
+	"mediumaquamarine": [102, 205, 170],
+	"mediumblue": [0, 0, 205],
+	"mediumorchid": [186, 85, 211],
+	"mediumpurple": [147, 112, 219],
+	"mediumseagreen": [60, 179, 113],
+	"mediumslateblue": [123, 104, 238],
+	"mediumspringgreen": [0, 250, 154],
+	"mediumturquoise": [72, 209, 204],
+	"mediumvioletred": [199, 21, 133],
+	"midnightblue": [25, 25, 112],
+	"mintcream": [245, 255, 250],
+	"mistyrose": [255, 228, 225],
+	"moccasin": [255, 228, 181],
+	"navajowhite": [255, 222, 173],
+	"navy": [0, 0, 128],
+	"oldlace": [253, 245, 230],
+	"olive": [128, 128, 0],
+	"olivedrab": [107, 142, 35],
+	"orange": [255, 165, 0],
+	"orangered": [255, 69, 0],
+	"orchid": [218, 112, 214],
+	"palegoldenrod": [238, 232, 170],
+	"palegreen": [152, 251, 152],
+	"paleturquoise": [175, 238, 238],
+	"palevioletred": [219, 112, 147],
+	"papayawhip": [255, 239, 213],
+	"peachpuff": [255, 218, 185],
+	"peru": [205, 133, 63],
+	"pink": [255, 192, 203],
+	"plum": [221, 160, 221],
+	"powderblue": [176, 224, 230],
+	"purple": [128, 0, 128],
+	"rebeccapurple": [102, 51, 153],
+	"red": [255, 0, 0],
+	"rosybrown": [188, 143, 143],
+	"royalblue": [65, 105, 225],
+	"saddlebrown": [139, 69, 19],
+	"salmon": [250, 128, 114],
+	"sandybrown": [244, 164, 96],
+	"seagreen": [46, 139, 87],
+	"seashell": [255, 245, 238],
+	"sienna": [160, 82, 45],
+	"silver": [192, 192, 192],
+	"skyblue": [135, 206, 235],
+	"slateblue": [106, 90, 205],
+	"slategray": [112, 128, 144],
+	"slategrey": [112, 128, 144],
+	"snow": [255, 250, 250],
+	"springgreen": [0, 255, 127],
+	"steelblue": [70, 130, 180],
+	"tan": [210, 180, 140],
+	"teal": [0, 128, 128],
+	"thistle": [216, 191, 216],
+	"tomato": [255, 99, 71],
+	"turquoise": [64, 224, 208],
+	"violet": [238, 130, 238],
+	"wheat": [245, 222, 179],
+	"white": [255, 255, 255],
+	"whitesmoke": [245, 245, 245],
+	"yellow": [255, 255, 0],
+	"yellowgreen": [154, 205, 50]
+};
+
+var index$2 = /*@__PURE__*/getDefaultExportFromCjs(colorName);
+
+var simpleSwizzle$1 = {exports: {}};
+
+var isArrayish$1 = function isArrayish(obj) {
+	if (!obj || typeof obj === 'string') {
+		return false;
+	}
+
+	return obj instanceof Array || Array.isArray(obj) ||
+		(obj.length >= 0 && (obj.splice instanceof Function ||
+			(Object.getOwnPropertyDescriptor(obj, (obj.length - 1)) && obj.constructor.name !== 'String')));
+};
+
+var index$1 = /*@__PURE__*/getDefaultExportFromCjs(isArrayish$1);
+
+var simpleSwizzle = simpleSwizzle$1.exports;
+
+'use strict';
+
+var isArrayish = isArrayish$1;
+
+var concat = Array.prototype.concat;
+var slice = Array.prototype.slice;
+
+var swizzle$1 = simpleSwizzle$1.exports = function swizzle(args) {
+	var results = [];
+
+	for (var i = 0, len = args.length; i < len; i++) {
+		var arg = args[i];
+
+		if (isArrayish(arg)) {
+			// http://jsperf.com/javascript-array-concat-vs-push/98
+			results = concat.call(results, slice.call(arg));
+		} else {
+			results.push(arg);
+		}
+	}
+
+	return results;
+};
+
+swizzle$1.wrap = function (fn) {
+	return function () {
+		return fn(swizzle$1(arguments));
+	};
+};
+
+var simpleSwizzleExports = simpleSwizzle$1.exports;
+var index = /*@__PURE__*/getDefaultExportFromCjs(simpleSwizzleExports);
+
+/* MIT license */
+var colorString = colorString$2.exports;
+
+var colorNames = colorName;
+var swizzle = simpleSwizzleExports;
+var hasOwnProperty = Object.hasOwnProperty;
+
+var reverseNames = Object.create(null);
+
+// create a list of reverse color names
+for (var name in colorNames) {
+	if (hasOwnProperty.call(colorNames, name)) {
+		reverseNames[colorNames[name]] = name;
+	}
+}
+
+var cs = colorString$2.exports = {
+	to: {},
+	get: {}
+};
+
+cs.get = function (string) {
+	var prefix = string.substring(0, 3).toLowerCase();
+	var val;
+	var model;
+	switch (prefix) {
+		case 'hsl':
+			val = cs.get.hsl(string);
+			model = 'hsl';
+			break;
+		case 'hwb':
+			val = cs.get.hwb(string);
+			model = 'hwb';
+			break;
+		default:
+			val = cs.get.rgb(string);
+			model = 'rgb';
+			break;
+	}
+
+	if (!val) {
+		return null;
+	}
+
+	return {model: model, value: val};
+};
+
+cs.get.rgb = function (string) {
+	if (!string) {
+		return null;
+	}
+
+	var abbr = /^#([a-f0-9]{3,4})$/i;
+	var hex = /^#([a-f0-9]{6})([a-f0-9]{2})?$/i;
+	var rgba = /^rgba?\(\s*([+-]?\d+)(?=[\s,])\s*(?:,\s*)?([+-]?\d+)(?=[\s,])\s*(?:,\s*)?([+-]?\d+)\s*(?:[,|\/]\s*([+-]?[\d\.]+)(%?)\s*)?\)$/;
+	var per = /^rgba?\(\s*([+-]?[\d\.]+)\%\s*,?\s*([+-]?[\d\.]+)\%\s*,?\s*([+-]?[\d\.]+)\%\s*(?:[,|\/]\s*([+-]?[\d\.]+)(%?)\s*)?\)$/;
+	var keyword = /^(\w+)$/;
+
+	var rgb = [0, 0, 0, 1];
+	var match;
+	var i;
+	var hexAlpha;
+
+	if (match = string.match(hex)) {
+		hexAlpha = match[2];
+		match = match[1];
+
+		for (i = 0; i < 3; i++) {
+			// https://jsperf.com/slice-vs-substr-vs-substring-methods-long-string/19
+			var i2 = i * 2;
+			rgb[i] = parseInt(match.slice(i2, i2 + 2), 16);
+		}
+
+		if (hexAlpha) {
+			rgb[3] = parseInt(hexAlpha, 16) / 255;
+		}
+	} else if (match = string.match(abbr)) {
+		match = match[1];
+		hexAlpha = match[3];
+
+		for (i = 0; i < 3; i++) {
+			rgb[i] = parseInt(match[i] + match[i], 16);
+		}
+
+		if (hexAlpha) {
+			rgb[3] = parseInt(hexAlpha + hexAlpha, 16) / 255;
+		}
+	} else if (match = string.match(rgba)) {
+		for (i = 0; i < 3; i++) {
+			rgb[i] = parseInt(match[i + 1], 0);
+		}
+
+		if (match[4]) {
+			if (match[5]) {
+				rgb[3] = parseFloat(match[4]) * 0.01;
+			} else {
+				rgb[3] = parseFloat(match[4]);
+			}
+		}
+	} else if (match = string.match(per)) {
+		for (i = 0; i < 3; i++) {
+			rgb[i] = Math.round(parseFloat(match[i + 1]) * 2.55);
+		}
+
+		if (match[4]) {
+			if (match[5]) {
+				rgb[3] = parseFloat(match[4]) * 0.01;
+			} else {
+				rgb[3] = parseFloat(match[4]);
+			}
+		}
+	} else if (match = string.match(keyword)) {
+		if (match[1] === 'transparent') {
+			return [0, 0, 0, 0];
+		}
+
+		if (!hasOwnProperty.call(colorNames, match[1])) {
+			return null;
+		}
+
+		rgb = colorNames[match[1]];
+		rgb[3] = 1;
+
+		return rgb;
+	} else {
+		return null;
+	}
+
+	for (i = 0; i < 3; i++) {
+		rgb[i] = clamp(rgb[i], 0, 255);
+	}
+	rgb[3] = clamp(rgb[3], 0, 1);
+
+	return rgb;
+};
+
+cs.get.hsl = function (string) {
+	if (!string) {
+		return null;
+	}
+
+	var hsl = /^hsla?\(\s*([+-]?(?:\d{0,3}\.)?\d+)(?:deg)?\s*,?\s*([+-]?[\d\.]+)%\s*,?\s*([+-]?[\d\.]+)%\s*(?:[,|\/]\s*([+-]?(?=\.\d|\d)(?:0|[1-9]\d*)?(?:\.\d*)?(?:[eE][+-]?\d+)?)\s*)?\)$/;
+	var match = string.match(hsl);
+
+	if (match) {
+		var alpha = parseFloat(match[4]);
+		var h = ((parseFloat(match[1]) % 360) + 360) % 360;
+		var s = clamp(parseFloat(match[2]), 0, 100);
+		var l = clamp(parseFloat(match[3]), 0, 100);
+		var a = clamp(isNaN(alpha) ? 1 : alpha, 0, 1);
+
+		return [h, s, l, a];
+	}
+
+	return null;
+};
+
+cs.get.hwb = function (string) {
+	if (!string) {
+		return null;
+	}
+
+	var hwb = /^hwb\(\s*([+-]?\d{0,3}(?:\.\d+)?)(?:deg)?\s*,\s*([+-]?[\d\.]+)%\s*,\s*([+-]?[\d\.]+)%\s*(?:,\s*([+-]?(?=\.\d|\d)(?:0|[1-9]\d*)?(?:\.\d*)?(?:[eE][+-]?\d+)?)\s*)?\)$/;
+	var match = string.match(hwb);
+
+	if (match) {
+		var alpha = parseFloat(match[4]);
+		var h = ((parseFloat(match[1]) % 360) + 360) % 360;
+		var w = clamp(parseFloat(match[2]), 0, 100);
+		var b = clamp(parseFloat(match[3]), 0, 100);
+		var a = clamp(isNaN(alpha) ? 1 : alpha, 0, 1);
+		return [h, w, b, a];
+	}
+
+	return null;
+};
+
+cs.to.hex = function () {
+	var rgba = swizzle(arguments);
+
+	return (
+		'#' +
+		hexDouble(rgba[0]) +
+		hexDouble(rgba[1]) +
+		hexDouble(rgba[2]) +
+		(rgba[3] < 1
+			? (hexDouble(Math.round(rgba[3] * 255)))
+			: '')
+	);
+};
+
+cs.to.rgb = function () {
+	var rgba = swizzle(arguments);
+
+	return rgba.length < 4 || rgba[3] === 1
+		? 'rgb(' + Math.round(rgba[0]) + ', ' + Math.round(rgba[1]) + ', ' + Math.round(rgba[2]) + ')'
+		: 'rgba(' + Math.round(rgba[0]) + ', ' + Math.round(rgba[1]) + ', ' + Math.round(rgba[2]) + ', ' + rgba[3] + ')';
+};
+
+cs.to.rgb.percent = function () {
+	var rgba = swizzle(arguments);
+
+	var r = Math.round(rgba[0] / 255 * 100);
+	var g = Math.round(rgba[1] / 255 * 100);
+	var b = Math.round(rgba[2] / 255 * 100);
+
+	return rgba.length < 4 || rgba[3] === 1
+		? 'rgb(' + r + '%, ' + g + '%, ' + b + '%)'
+		: 'rgba(' + r + '%, ' + g + '%, ' + b + '%, ' + rgba[3] + ')';
+};
+
+cs.to.hsl = function () {
+	var hsla = swizzle(arguments);
+	return hsla.length < 4 || hsla[3] === 1
+		? 'hsl(' + hsla[0] + ', ' + hsla[1] + '%, ' + hsla[2] + '%)'
+		: 'hsla(' + hsla[0] + ', ' + hsla[1] + '%, ' + hsla[2] + '%, ' + hsla[3] + ')';
+};
+
+// hwb is a bit different than rgb(a) & hsl(a) since there is no alpha specific syntax
+// (hwb have alpha optional & 1 is default value)
+cs.to.hwb = function () {
+	var hwba = swizzle(arguments);
+
+	var a = '';
+	if (hwba.length >= 4 && hwba[3] !== 1) {
+		a = ', ' + hwba[3];
+	}
+
+	return 'hwb(' + hwba[0] + ', ' + hwba[1] + '%, ' + hwba[2] + '%' + a + ')';
+};
+
+cs.to.keyword = function (rgb) {
+	return reverseNames[rgb.slice(0, 3)];
+};
+
+// helpers
+function clamp(num, min, max) {
+	return Math.min(Math.max(min, num), max);
+}
+
+function hexDouble(num) {
+	var str = Math.round(num).toString(16).toUpperCase();
+	return (str.length < 2) ? '0' + str : str;
+}
+
+var colorStringExports = colorString$2.exports;
+var colorString$1 = /*@__PURE__*/getDefaultExportFromCjs(colorStringExports);
 
 var $version = 8;
 var $root = {
@@ -2919,7 +3405,7 @@ var function_stop = {
 	],
 	length: 2
 };
-var expression = {
+var expression$1 = {
 	type: "array",
 	value: "*",
 	minimum: 1
@@ -4127,7 +4613,7 @@ var promoteId = {
 		type: "string"
 	}
 };
-var spec = {
+var v8Spec = {
 	$version: $version,
 	$root: $root,
 	sources: sources,
@@ -4213,7 +4699,7 @@ var spec = {
 	}
 },
 	function_stop: function_stop,
-	expression: expression,
+	expression: expression$1,
 	light: light,
 	terrain: terrain,
 	paint: paint$9,
@@ -4381,6 +4867,431 @@ var spec = {
 	promoteId: promoteId
 };
 
+const refProperties = ['type', 'source', 'source-layer', 'minzoom', 'maxzoom', 'filter', 'layout'];
+
+function deref(layer, parent) {
+    const result = {};
+    for (const k in layer) {
+        if (k !== 'ref') {
+            result[k] = layer[k];
+        }
+    }
+    refProperties.forEach((k) => {
+        if (k in parent) {
+            result[k] = parent[k];
+        }
+    });
+    return result;
+}
+/**
+ * Given an array of layers, some of which may contain `ref` properties
+ * whose value is the `id` of another property, return a new array where
+ * such layers have been augmented with the 'type', 'source', etc. properties
+ * from the parent layer, and the `ref` property has been removed.
+ *
+ * The input is not modified. The output may contain references to portions
+ * of the input.
+ *
+ * @private
+ * @param {Array<Layer>} layers
+ * @returns {Array<Layer>}
+ */
+function derefLayers(layers) {
+    layers = layers.slice();
+    const map = Object.create(null);
+    for (let i = 0; i < layers.length; i++) {
+        map[layers[i].id] = layers[i];
+    }
+    for (let i = 0; i < layers.length; i++) {
+        if ('ref' in layers[i]) {
+            layers[i] = deref(layers[i], map[layers[i].ref]);
+        }
+    }
+    return layers;
+}
+
+/**
+ * Deeply compares two object literals.
+ *
+ * @private
+ */
+function deepEqual(a, b) {
+    if (Array.isArray(a)) {
+        if (!Array.isArray(b) || a.length !== b.length)
+            return false;
+        for (let i = 0; i < a.length; i++) {
+            if (!deepEqual(a[i], b[i]))
+                return false;
+        }
+        return true;
+    }
+    if (typeof a === 'object' && a !== null && b !== null) {
+        if (!(typeof b === 'object'))
+            return false;
+        const keys = Object.keys(a);
+        if (keys.length !== Object.keys(b).length)
+            return false;
+        for (const key in a) {
+            if (!deepEqual(a[key], b[key]))
+                return false;
+        }
+        return true;
+    }
+    return a === b;
+}
+
+const operations = {
+    /*
+     * { command: 'setStyle', args: [stylesheet] }
+     */
+    setStyle: 'setStyle',
+    /*
+     * { command: 'addLayer', args: [layer, 'beforeLayerId'] }
+     */
+    addLayer: 'addLayer',
+    /*
+     * { command: 'removeLayer', args: ['layerId'] }
+     */
+    removeLayer: 'removeLayer',
+    /*
+     * { command: 'setPaintProperty', args: ['layerId', 'prop', value] }
+     */
+    setPaintProperty: 'setPaintProperty',
+    /*
+     * { command: 'setLayoutProperty', args: ['layerId', 'prop', value] }
+     */
+    setLayoutProperty: 'setLayoutProperty',
+    /*
+     * { command: 'setFilter', args: ['layerId', filter] }
+     */
+    setFilter: 'setFilter',
+    /*
+     * { command: 'addSource', args: ['sourceId', source] }
+     */
+    addSource: 'addSource',
+    /*
+     * { command: 'removeSource', args: ['sourceId'] }
+     */
+    removeSource: 'removeSource',
+    /*
+     * { command: 'setGeoJSONSourceData', args: ['sourceId', data] }
+     */
+    setGeoJSONSourceData: 'setGeoJSONSourceData',
+    /*
+     * { command: 'setLayerZoomRange', args: ['layerId', 0, 22] }
+     */
+    setLayerZoomRange: 'setLayerZoomRange',
+    /*
+     * { command: 'setLayerProperty', args: ['layerId', 'prop', value] }
+     */
+    setLayerProperty: 'setLayerProperty',
+    /*
+     * { command: 'setCenter', args: [[lon, lat]] }
+     */
+    setCenter: 'setCenter',
+    /*
+     * { command: 'setZoom', args: [zoom] }
+     */
+    setZoom: 'setZoom',
+    /*
+     * { command: 'setBearing', args: [bearing] }
+     */
+    setBearing: 'setBearing',
+    /*
+     * { command: 'setPitch', args: [pitch] }
+     */
+    setPitch: 'setPitch',
+    /*
+     * { command: 'setSprite', args: ['spriteUrl'] }
+     */
+    setSprite: 'setSprite',
+    /*
+     * { command: 'setGlyphs', args: ['glyphsUrl'] }
+     */
+    setGlyphs: 'setGlyphs',
+    /*
+     * { command: 'setTransition', args: [transition] }
+     */
+    setTransition: 'setTransition',
+    /*
+     * { command: 'setLighting', args: [lightProperties] }
+     */
+    setLight: 'setLight'
+};
+function addSource(sourceId, after, commands) {
+    commands.push({ command: operations.addSource, args: [sourceId, after[sourceId]] });
+}
+function removeSource(sourceId, commands, sourcesRemoved) {
+    commands.push({ command: operations.removeSource, args: [sourceId] });
+    sourcesRemoved[sourceId] = true;
+}
+function updateSource(sourceId, after, commands, sourcesRemoved) {
+    removeSource(sourceId, commands, sourcesRemoved);
+    addSource(sourceId, after, commands);
+}
+function canUpdateGeoJSON(before, after, sourceId) {
+    let prop;
+    for (prop in before[sourceId]) {
+        if (!Object.prototype.hasOwnProperty.call(before[sourceId], prop))
+            continue;
+        if (prop !== 'data' && !deepEqual(before[sourceId][prop], after[sourceId][prop])) {
+            return false;
+        }
+    }
+    for (prop in after[sourceId]) {
+        if (!Object.prototype.hasOwnProperty.call(after[sourceId], prop))
+            continue;
+        if (prop !== 'data' && !deepEqual(before[sourceId][prop], after[sourceId][prop])) {
+            return false;
+        }
+    }
+    return true;
+}
+function diffSources(before, after, commands, sourcesRemoved) {
+    before = before || {};
+    after = after || {};
+    let sourceId;
+    // look for sources to remove
+    for (sourceId in before) {
+        if (!Object.prototype.hasOwnProperty.call(before, sourceId))
+            continue;
+        if (!Object.prototype.hasOwnProperty.call(after, sourceId)) {
+            removeSource(sourceId, commands, sourcesRemoved);
+        }
+    }
+    // look for sources to add/update
+    for (sourceId in after) {
+        if (!Object.prototype.hasOwnProperty.call(after, sourceId))
+            continue;
+        if (!Object.prototype.hasOwnProperty.call(before, sourceId)) {
+            addSource(sourceId, after, commands);
+        }
+        else if (!deepEqual(before[sourceId], after[sourceId])) {
+            if (before[sourceId].type === 'geojson' && after[sourceId].type === 'geojson' && canUpdateGeoJSON(before, after, sourceId)) {
+                commands.push({ command: operations.setGeoJSONSourceData, args: [sourceId, after[sourceId].data] });
+            }
+            else {
+                // no update command, must remove then add
+                updateSource(sourceId, after, commands, sourcesRemoved);
+            }
+        }
+    }
+}
+function diffLayerPropertyChanges(before, after, commands, layerId, klass, command) {
+    before = before || {};
+    after = after || {};
+    let prop;
+    for (prop in before) {
+        if (!Object.prototype.hasOwnProperty.call(before, prop))
+            continue;
+        if (!deepEqual(before[prop], after[prop])) {
+            commands.push({ command, args: [layerId, prop, after[prop], klass] });
+        }
+    }
+    for (prop in after) {
+        if (!Object.prototype.hasOwnProperty.call(after, prop) || Object.prototype.hasOwnProperty.call(before, prop))
+            continue;
+        if (!deepEqual(before[prop], after[prop])) {
+            commands.push({ command, args: [layerId, prop, after[prop], klass] });
+        }
+    }
+}
+function pluckId(layer) {
+    return layer.id;
+}
+function indexById(group, layer) {
+    group[layer.id] = layer;
+    return group;
+}
+function diffLayers(before, after, commands) {
+    before = before || [];
+    after = after || [];
+    // order of layers by id
+    const beforeOrder = before.map(pluckId);
+    const afterOrder = after.map(pluckId);
+    // index of layer by id
+    const beforeIndex = before.reduce(indexById, {});
+    const afterIndex = after.reduce(indexById, {});
+    // track order of layers as if they have been mutated
+    const tracker = beforeOrder.slice();
+    // layers that have been added do not need to be diffed
+    const clean = Object.create(null);
+    let i, d, layerId, beforeLayer, afterLayer, insertBeforeLayerId, prop;
+    // remove layers
+    for (i = 0, d = 0; i < beforeOrder.length; i++) {
+        layerId = beforeOrder[i];
+        if (!Object.prototype.hasOwnProperty.call(afterIndex, layerId)) {
+            commands.push({ command: operations.removeLayer, args: [layerId] });
+            tracker.splice(tracker.indexOf(layerId, d), 1);
+        }
+        else {
+            // limit where in tracker we need to look for a match
+            d++;
+        }
+    }
+    // add/reorder layers
+    for (i = 0, d = 0; i < afterOrder.length; i++) {
+        // work backwards as insert is before an existing layer
+        layerId = afterOrder[afterOrder.length - 1 - i];
+        if (tracker[tracker.length - 1 - i] === layerId)
+            continue;
+        if (Object.prototype.hasOwnProperty.call(beforeIndex, layerId)) {
+            // remove the layer before we insert at the correct position
+            commands.push({ command: operations.removeLayer, args: [layerId] });
+            tracker.splice(tracker.lastIndexOf(layerId, tracker.length - d), 1);
+        }
+        else {
+            // limit where in tracker we need to look for a match
+            d++;
+        }
+        // add layer at correct position
+        insertBeforeLayerId = tracker[tracker.length - i];
+        commands.push({ command: operations.addLayer, args: [afterIndex[layerId], insertBeforeLayerId] });
+        tracker.splice(tracker.length - i, 0, layerId);
+        clean[layerId] = true;
+    }
+    // update layers
+    for (i = 0; i < afterOrder.length; i++) {
+        layerId = afterOrder[i];
+        beforeLayer = beforeIndex[layerId];
+        afterLayer = afterIndex[layerId];
+        // no need to update if previously added (new or moved)
+        if (clean[layerId] || deepEqual(beforeLayer, afterLayer))
+            continue;
+        // If source, source-layer, or type have changes, then remove the layer
+        // and add it back 'from scratch'.
+        if (!deepEqual(beforeLayer.source, afterLayer.source) || !deepEqual(beforeLayer['source-layer'], afterLayer['source-layer']) || !deepEqual(beforeLayer.type, afterLayer.type)) {
+            commands.push({ command: operations.removeLayer, args: [layerId] });
+            // we add the layer back at the same position it was already in, so
+            // there's no need to update the `tracker`
+            insertBeforeLayerId = tracker[tracker.lastIndexOf(layerId) + 1];
+            commands.push({ command: operations.addLayer, args: [afterLayer, insertBeforeLayerId] });
+            continue;
+        }
+        // layout, paint, filter, minzoom, maxzoom
+        diffLayerPropertyChanges(beforeLayer.layout, afterLayer.layout, commands, layerId, null, operations.setLayoutProperty);
+        diffLayerPropertyChanges(beforeLayer.paint, afterLayer.paint, commands, layerId, null, operations.setPaintProperty);
+        if (!deepEqual(beforeLayer.filter, afterLayer.filter)) {
+            commands.push({ command: operations.setFilter, args: [layerId, afterLayer.filter] });
+        }
+        if (!deepEqual(beforeLayer.minzoom, afterLayer.minzoom) || !deepEqual(beforeLayer.maxzoom, afterLayer.maxzoom)) {
+            commands.push({ command: operations.setLayerZoomRange, args: [layerId, afterLayer.minzoom, afterLayer.maxzoom] });
+        }
+        // handle all other layer props, including paint.*
+        for (prop in beforeLayer) {
+            if (!Object.prototype.hasOwnProperty.call(beforeLayer, prop))
+                continue;
+            if (prop === 'layout' || prop === 'paint' || prop === 'filter' ||
+                prop === 'metadata' || prop === 'minzoom' || prop === 'maxzoom')
+                continue;
+            if (prop.indexOf('paint.') === 0) {
+                diffLayerPropertyChanges(beforeLayer[prop], afterLayer[prop], commands, layerId, prop.slice(6), operations.setPaintProperty);
+            }
+            else if (!deepEqual(beforeLayer[prop], afterLayer[prop])) {
+                commands.push({ command: operations.setLayerProperty, args: [layerId, prop, afterLayer[prop]] });
+            }
+        }
+        for (prop in afterLayer) {
+            if (!Object.prototype.hasOwnProperty.call(afterLayer, prop) || Object.prototype.hasOwnProperty.call(beforeLayer, prop))
+                continue;
+            if (prop === 'layout' || prop === 'paint' || prop === 'filter' ||
+                prop === 'metadata' || prop === 'minzoom' || prop === 'maxzoom')
+                continue;
+            if (prop.indexOf('paint.') === 0) {
+                diffLayerPropertyChanges(beforeLayer[prop], afterLayer[prop], commands, layerId, prop.slice(6), operations.setPaintProperty);
+            }
+            else if (!deepEqual(beforeLayer[prop], afterLayer[prop])) {
+                commands.push({ command: operations.setLayerProperty, args: [layerId, prop, afterLayer[prop]] });
+            }
+        }
+    }
+}
+/**
+ * Diff two stylesheet
+ *
+ * Creates semanticly aware diffs that can easily be applied at runtime.
+ * Operations produced by the diff closely resemble the maplibre-gl-js API. Any
+ * error creating the diff will fall back to the 'setStyle' operation.
+ *
+ * Example diff:
+ * [
+ *     { command: 'setConstant', args: ['@water', '#0000FF'] },
+ *     { command: 'setPaintProperty', args: ['background', 'background-color', 'black'] }
+ * ]
+ *
+ * @private
+ * @param {*} [before] stylesheet to compare from
+ * @param {*} after stylesheet to compare to
+ * @returns Array list of changes
+ */
+function diffStyles(before, after) {
+    if (!before)
+        return [{ command: operations.setStyle, args: [after] }];
+    let commands = [];
+    try {
+        // Handle changes to top-level properties
+        if (!deepEqual(before.version, after.version)) {
+            return [{ command: operations.setStyle, args: [after] }];
+        }
+        if (!deepEqual(before.center, after.center)) {
+            commands.push({ command: operations.setCenter, args: [after.center] });
+        }
+        if (!deepEqual(before.zoom, after.zoom)) {
+            commands.push({ command: operations.setZoom, args: [after.zoom] });
+        }
+        if (!deepEqual(before.bearing, after.bearing)) {
+            commands.push({ command: operations.setBearing, args: [after.bearing] });
+        }
+        if (!deepEqual(before.pitch, after.pitch)) {
+            commands.push({ command: operations.setPitch, args: [after.pitch] });
+        }
+        if (!deepEqual(before.sprite, after.sprite)) {
+            commands.push({ command: operations.setSprite, args: [after.sprite] });
+        }
+        if (!deepEqual(before.glyphs, after.glyphs)) {
+            commands.push({ command: operations.setGlyphs, args: [after.glyphs] });
+        }
+        if (!deepEqual(before.transition, after.transition)) {
+            commands.push({ command: operations.setTransition, args: [after.transition] });
+        }
+        if (!deepEqual(before.light, after.light)) {
+            commands.push({ command: operations.setLight, args: [after.light] });
+        }
+        // Handle changes to `sources`
+        // If a source is to be removed, we also--before the removeSource
+        // command--need to remove all the style layers that depend on it.
+        const sourcesRemoved = {};
+        // First collect the {add,remove}Source commands
+        const removeOrAddSourceCommands = [];
+        diffSources(before.sources, after.sources, removeOrAddSourceCommands, sourcesRemoved);
+        // Push a removeLayer command for each style layer that depends on a
+        // source that's being removed.
+        // Also, exclude any such layers them from the input to `diffLayers`
+        // below, so that diffLayers produces the appropriate `addLayers`
+        // command
+        const beforeLayers = [];
+        if (before.layers) {
+            before.layers.forEach((layer) => {
+                if (sourcesRemoved[layer.source]) {
+                    commands.push({ command: operations.removeLayer, args: [layer.id] });
+                }
+                else {
+                    beforeLayers.push(layer);
+                }
+            });
+        }
+        commands = commands.concat(removeOrAddSourceCommands);
+        // Handle changes to `layers`
+        diffLayers(beforeLayers, after.layers, commands);
+    }
+    catch (e) {
+        // fall back to setStyle
+        console.warn('Unable to compute style diff:', e);
+        commands = [{ command: operations.setStyle, args: [after] }];
+    }
+    return commands;
+}
+
 // Note: Do not inherit from Error. It breaks when transpiling to ES5.
 class ValidationError {
     constructor(key, value, message, identifier) {
@@ -4393,14 +5304,13 @@ class ValidationError {
     }
 }
 
-function validateConstants(options) {
-    const key = options.key;
-    const constants = options.value;
-    if (constants) {
-        return [new ValidationError(key, constants, 'constants have been deprecated as of v8')];
-    }
-    else {
-        return [];
+// Note: Do not inherit from Error. It breaks when transpiling to ES5.
+class ParsingError {
+    constructor(error) {
+        this.error = error;
+        this.message = error.message;
+        const match = error.message.match(/line (\d+)/);
+        this.line = match ? parseInt(match[1], 10) : 0;
     }
 }
 
@@ -4411,29 +5321,6 @@ function extendBy(output, ...inputs) {
         }
     }
     return output;
-}
-
-// Turn jsonlint-lines-primitives objects into primitive objects
-function unbundle(value) {
-    if (value instanceof Number || value instanceof String || value instanceof Boolean) {
-        return value.valueOf();
-    }
-    else {
-        return value;
-    }
-}
-function deepUnbundle(value) {
-    if (Array.isArray(value)) {
-        return value.map(deepUnbundle);
-    }
-    else if (value instanceof Object && !(value instanceof Number || value instanceof String || value instanceof Boolean)) {
-        const unbundledValue = {};
-        for (const key in value) {
-            unbundledValue[key] = deepUnbundle(value[key]);
-        }
-        return unbundledValue;
-    }
-    return unbundle(value);
 }
 
 class ExpressionParsingError extends Error {
@@ -4565,254 +5452,211 @@ function isValidNativeType(provided, allowedTypes) {
         }
     });
 }
-
-var csscolorparser = {};
-
-var parseCSSColor_1;
-// (c) Dean McNamee <dean@gmail.com>, 2012.
-//
-// https://github.com/deanm/css-color-parser-js
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to
-// deal in the Software without restriction, including without limitation the
-// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// sell copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-// IN THE SOFTWARE.
-
-// http://www.w3.org/TR/css3-color/
-var kCSSColorTable = {
-  "transparent": [0,0,0,0], "aliceblue": [240,248,255,1],
-  "antiquewhite": [250,235,215,1], "aqua": [0,255,255,1],
-  "aquamarine": [127,255,212,1], "azure": [240,255,255,1],
-  "beige": [245,245,220,1], "bisque": [255,228,196,1],
-  "black": [0,0,0,1], "blanchedalmond": [255,235,205,1],
-  "blue": [0,0,255,1], "blueviolet": [138,43,226,1],
-  "brown": [165,42,42,1], "burlywood": [222,184,135,1],
-  "cadetblue": [95,158,160,1], "chartreuse": [127,255,0,1],
-  "chocolate": [210,105,30,1], "coral": [255,127,80,1],
-  "cornflowerblue": [100,149,237,1], "cornsilk": [255,248,220,1],
-  "crimson": [220,20,60,1], "cyan": [0,255,255,1],
-  "darkblue": [0,0,139,1], "darkcyan": [0,139,139,1],
-  "darkgoldenrod": [184,134,11,1], "darkgray": [169,169,169,1],
-  "darkgreen": [0,100,0,1], "darkgrey": [169,169,169,1],
-  "darkkhaki": [189,183,107,1], "darkmagenta": [139,0,139,1],
-  "darkolivegreen": [85,107,47,1], "darkorange": [255,140,0,1],
-  "darkorchid": [153,50,204,1], "darkred": [139,0,0,1],
-  "darksalmon": [233,150,122,1], "darkseagreen": [143,188,143,1],
-  "darkslateblue": [72,61,139,1], "darkslategray": [47,79,79,1],
-  "darkslategrey": [47,79,79,1], "darkturquoise": [0,206,209,1],
-  "darkviolet": [148,0,211,1], "deeppink": [255,20,147,1],
-  "deepskyblue": [0,191,255,1], "dimgray": [105,105,105,1],
-  "dimgrey": [105,105,105,1], "dodgerblue": [30,144,255,1],
-  "firebrick": [178,34,34,1], "floralwhite": [255,250,240,1],
-  "forestgreen": [34,139,34,1], "fuchsia": [255,0,255,1],
-  "gainsboro": [220,220,220,1], "ghostwhite": [248,248,255,1],
-  "gold": [255,215,0,1], "goldenrod": [218,165,32,1],
-  "gray": [128,128,128,1], "green": [0,128,0,1],
-  "greenyellow": [173,255,47,1], "grey": [128,128,128,1],
-  "honeydew": [240,255,240,1], "hotpink": [255,105,180,1],
-  "indianred": [205,92,92,1], "indigo": [75,0,130,1],
-  "ivory": [255,255,240,1], "khaki": [240,230,140,1],
-  "lavender": [230,230,250,1], "lavenderblush": [255,240,245,1],
-  "lawngreen": [124,252,0,1], "lemonchiffon": [255,250,205,1],
-  "lightblue": [173,216,230,1], "lightcoral": [240,128,128,1],
-  "lightcyan": [224,255,255,1], "lightgoldenrodyellow": [250,250,210,1],
-  "lightgray": [211,211,211,1], "lightgreen": [144,238,144,1],
-  "lightgrey": [211,211,211,1], "lightpink": [255,182,193,1],
-  "lightsalmon": [255,160,122,1], "lightseagreen": [32,178,170,1],
-  "lightskyblue": [135,206,250,1], "lightslategray": [119,136,153,1],
-  "lightslategrey": [119,136,153,1], "lightsteelblue": [176,196,222,1],
-  "lightyellow": [255,255,224,1], "lime": [0,255,0,1],
-  "limegreen": [50,205,50,1], "linen": [250,240,230,1],
-  "magenta": [255,0,255,1], "maroon": [128,0,0,1],
-  "mediumaquamarine": [102,205,170,1], "mediumblue": [0,0,205,1],
-  "mediumorchid": [186,85,211,1], "mediumpurple": [147,112,219,1],
-  "mediumseagreen": [60,179,113,1], "mediumslateblue": [123,104,238,1],
-  "mediumspringgreen": [0,250,154,1], "mediumturquoise": [72,209,204,1],
-  "mediumvioletred": [199,21,133,1], "midnightblue": [25,25,112,1],
-  "mintcream": [245,255,250,1], "mistyrose": [255,228,225,1],
-  "moccasin": [255,228,181,1], "navajowhite": [255,222,173,1],
-  "navy": [0,0,128,1], "oldlace": [253,245,230,1],
-  "olive": [128,128,0,1], "olivedrab": [107,142,35,1],
-  "orange": [255,165,0,1], "orangered": [255,69,0,1],
-  "orchid": [218,112,214,1], "palegoldenrod": [238,232,170,1],
-  "palegreen": [152,251,152,1], "paleturquoise": [175,238,238,1],
-  "palevioletred": [219,112,147,1], "papayawhip": [255,239,213,1],
-  "peachpuff": [255,218,185,1], "peru": [205,133,63,1],
-  "pink": [255,192,203,1], "plum": [221,160,221,1],
-  "powderblue": [176,224,230,1], "purple": [128,0,128,1],
-  "rebeccapurple": [102,51,153,1],
-  "red": [255,0,0,1], "rosybrown": [188,143,143,1],
-  "royalblue": [65,105,225,1], "saddlebrown": [139,69,19,1],
-  "salmon": [250,128,114,1], "sandybrown": [244,164,96,1],
-  "seagreen": [46,139,87,1], "seashell": [255,245,238,1],
-  "sienna": [160,82,45,1], "silver": [192,192,192,1],
-  "skyblue": [135,206,235,1], "slateblue": [106,90,205,1],
-  "slategray": [112,128,144,1], "slategrey": [112,128,144,1],
-  "snow": [255,250,250,1], "springgreen": [0,255,127,1],
-  "steelblue": [70,130,180,1], "tan": [210,180,140,1],
-  "teal": [0,128,128,1], "thistle": [216,191,216,1],
-  "tomato": [255,99,71,1], "turquoise": [64,224,208,1],
-  "violet": [238,130,238,1], "wheat": [245,222,179,1],
-  "white": [255,255,255,1], "whitesmoke": [245,245,245,1],
-  "yellow": [255,255,0,1], "yellowgreen": [154,205,50,1]};
-
-function clamp_css_byte(i) {  // Clamp to integer 0 .. 255.
-  i = Math.round(i);  // Seems to be what Chrome does (vs truncation).
-  return i < 0 ? 0 : i > 255 ? 255 : i;
-}
-
-function clamp_css_float(f) {  // Clamp to float 0.0 .. 1.0.
-  return f < 0 ? 0 : f > 1 ? 1 : f;
-}
-
-function parse_css_int(str) {  // int or percentage.
-  if (str[str.length - 1] === '%')
-    return clamp_css_byte(parseFloat(str) / 100 * 255);
-  return clamp_css_byte(parseInt(str));
-}
-
-function parse_css_float(str) {  // float or percentage.
-  if (str[str.length - 1] === '%')
-    return clamp_css_float(parseFloat(str) / 100);
-  return clamp_css_float(parseFloat(str));
-}
-
-function css_hue_to_rgb(m1, m2, h) {
-  if (h < 0) h += 1;
-  else if (h > 1) h -= 1;
-
-  if (h * 6 < 1) return m1 + (m2 - m1) * h * 6;
-  if (h * 2 < 1) return m2;
-  if (h * 3 < 2) return m1 + (m2 - m1) * (2/3 - h) * 6;
-  return m1;
-}
-
-function parseCSSColor(css_str) {
-  // Remove all whitespace, not compliant, but should just be more accepting.
-  var str = css_str.replace(/ /g, '').toLowerCase();
-
-  // Color keywords (and transparent) lookup.
-  if (str in kCSSColorTable) return kCSSColorTable[str].slice();  // dup.
-
-  // #abc and #abc123 syntax.
-  if (str[0] === '#') {
-    if (str.length === 4) {
-      var iv = parseInt(str.substr(1), 16);  // TODO(deanm): Stricter parsing.
-      if (!(iv >= 0 && iv <= 0xfff)) return null;  // Covers NaN.
-      return [((iv & 0xf00) >> 4) | ((iv & 0xf00) >> 8),
-              (iv & 0xf0) | ((iv & 0xf0) >> 4),
-              (iv & 0xf) | ((iv & 0xf) << 4),
-              1];
-    } else if (str.length === 7) {
-      var iv = parseInt(str.substr(1), 16);  // TODO(deanm): Stricter parsing.
-      if (!(iv >= 0 && iv <= 0xffffff)) return null;  // Covers NaN.
-      return [(iv & 0xff0000) >> 16,
-              (iv & 0xff00) >> 8,
-              iv & 0xff,
-              1];
+/**
+ * Verify whether the specified type is of the same type as the specified sample.
+ *
+ * @param provided Type to verify
+ * @param sample Sample type to reference
+ * @returns `true` if both objects are of the same type, `false` otherwise
+ * @example basic types
+ * if (verifyType(outputType, ValueType)) {
+ *     // type narrowed to:
+ *     outputType.kind; // 'value'
+ * }
+ * @example array types
+ * if (verifyType(outputType, array(NumberType))) {
+ *     // type narrowed to:
+ *     outputType.kind; // 'array'
+ *     outputType.itemType; // NumberTypeT
+ *     outputType.itemType.kind; // 'number'
+ * }
+ */
+function verifyType(provided, sample) {
+    if (provided.kind === 'array' && sample.kind === 'array') {
+        return provided.itemType.kind === sample.itemType.kind && typeof provided.N === 'number';
     }
-
-    return null;
-  }
-
-  var op = str.indexOf('('), ep = str.indexOf(')');
-  if (op !== -1 && ep + 1 === str.length) {
-    var fname = str.substr(0, op);
-    var params = str.substr(op+1, ep-(op+1)).split(',');
-    var alpha = 1;  // To allow case fallthrough.
-    switch (fname) {
-      case 'rgba':
-        if (params.length !== 4) return null;
-        alpha = parse_css_float(params.pop());
-        // Fall through.
-      case 'rgb':
-        if (params.length !== 3) return null;
-        return [parse_css_int(params[0]),
-                parse_css_int(params[1]),
-                parse_css_int(params[2]),
-                alpha];
-      case 'hsla':
-        if (params.length !== 4) return null;
-        alpha = parse_css_float(params.pop());
-        // Fall through.
-      case 'hsl':
-        if (params.length !== 3) return null;
-        var h = (((parseFloat(params[0]) % 360) + 360) % 360) / 360;  // 0 .. 1
-        // NOTE(deanm): According to the CSS spec s/l should only be
-        // percentages, but we don't bother and let float or percentage.
-        var s = parse_css_float(params[1]);
-        var l = parse_css_float(params[2]);
-        var m2 = l <= 0.5 ? l * (s + 1) : l + s - l * s;
-        var m1 = l * 2 - m2;
-        return [clamp_css_byte(css_hue_to_rgb(m1, m2, h+1/3) * 255),
-                clamp_css_byte(css_hue_to_rgb(m1, m2, h) * 255),
-                clamp_css_byte(css_hue_to_rgb(m1, m2, h-1/3) * 255),
-                alpha];
-      default:
-        return null;
-    }
-  }
-
-  return null;
+    return provided.kind === sample.kind;
 }
 
-try { parseCSSColor_1 = csscolorparser.parseCSSColor = parseCSSColor; } catch(e) { }
+// Constants
+const Xn = 0.950470, // D65 standard referent
+Yn = 1, Zn = 1.088830, t0 = 4 / 29, t1 = 6 / 29, t2 = 3 * t1 * t1, t3 = t1 * t1 * t1, deg2rad = Math.PI / 180, rad2deg = 180 / Math.PI;
+function constrainAngle(angle) {
+    angle = angle % 360;
+    if (angle < 0) {
+        angle += 360;
+    }
+    return angle;
+}
+function rgbToLab([r, g, b, alpha]) {
+    r = rgb2xyz(r);
+    g = rgb2xyz(g);
+    b = rgb2xyz(b);
+    const x = xyz2lab((0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / Xn);
+    const y = xyz2lab((0.2126729 * r + 0.7151522 * g + 0.0721750 * b) / Yn);
+    const z = xyz2lab((0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / Zn);
+    const l = 116 * y - 16;
+    return [(l < 0) ? 0 : l, 500 * (x - y), 200 * (y - z), alpha];
+}
+function rgb2xyz(x) {
+    return (x <= 0.04045) ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+}
+function xyz2lab(t) {
+    return (t > t3) ? Math.pow(t, 1 / 3) : t / t2 + t0;
+}
+function labToRgb([l, a, b, alpha]) {
+    let y = (l + 16) / 116, x = isNaN(a) ? y : y + a / 500, z = isNaN(b) ? y : y - b / 200;
+    y = Yn * lab2xyz(y);
+    x = Xn * lab2xyz(x);
+    z = Zn * lab2xyz(z);
+    return [
+        xyz2rgb(3.2404542 * x - 1.5371385 * y - 0.4985314 * z),
+        xyz2rgb(-0.9692660 * x + 1.8760108 * y + 0.0415560 * z),
+        xyz2rgb(0.0556434 * x - 0.2040259 * y + 1.0572252 * z),
+        alpha,
+    ];
+}
+function xyz2rgb(x) {
+    x = (x <= 0.00304) ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
+    return (x < 0) ? 0 : (x > 1) ? 1 : x; // clip to 0..1 range
+}
+function lab2xyz(t) {
+    return (t > t1) ? t * t * t : t2 * (t - t0);
+}
+function rgbToHcl(rgbColor) {
+    const [l, a, b, alpha] = rgbToLab(rgbColor);
+    const c = Math.sqrt(a * a + b * b);
+    const h = Math.round(c * 10000) ? constrainAngle(Math.atan2(b, a) * rad2deg) : NaN;
+    return [h, c, l, alpha];
+}
+function hclToRgb([h, c, l, alpha]) {
+    h = isNaN(h) ? 0 : h * deg2rad;
+    return labToRgb([l, Math.cos(h) * c, Math.sin(h) * c, alpha]);
+}
+// https://drafts.csswg.org/css-color-4/#hsl-to-rgb
+function hslToRgb([h, s, l, alpha]) {
+    h = constrainAngle(h);
+    s /= 100;
+    l /= 100;
+    function f(n) {
+        const k = (n + h / 30) % 12;
+        const a = s * Math.min(l, 1 - l);
+        return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    }
+    return [f(0), f(8), f(4), alpha];
+}
 
 /**
- * An RGBA color value. Create instances from color strings using the static
- * method `Color.parse`. The constructor accepts RGB channel values in the range
- * `[0, 1]`, premultiplied by A.
- *
- * @param {number} r The red channel.
- * @param {number} g The green channel.
- * @param {number} b The blue channel.
- * @param {number} a The alpha channel.
+ * Color representation used by WebGL.
+ * Defined in sRGB color space and pre-blended with alpha.
  * @private
  */
 class Color {
-    constructor(r, g, b, a = 1) {
+    /**
+     * @param r Red component premultiplied by `alpha` 0..1
+     * @param g Green component premultiplied by `alpha` 0..1
+     * @param b Blue component premultiplied by `alpha` 0..1
+     * @param [alpha=1] Alpha component 0..1
+     * @param [premultiplied=true] Whether the `r`, `g` and `b` values have already
+     * been multiplied by alpha. If `true` nothing happens if `false` then they will
+     * be multiplied automatically.
+     */
+    constructor(r, g, b, alpha = 1, premultiplied = true) {
         this.r = r;
         this.g = g;
         this.b = b;
-        this.a = a;
+        this.a = alpha;
+        if (!premultiplied) {
+            this.r *= alpha;
+            this.g *= alpha;
+            this.b *= alpha;
+            if (!alpha) {
+                // alpha = 0 erases completely rgb channels. This behavior is not desirable
+                // if this particular color is later used in color interpolation.
+                // Because of that, a reference to original color is saved.
+                this.overwriteGetter('rgb', [r, g, b, alpha]);
+            }
+        }
     }
     /**
-     * Parses valid CSS color strings and returns a `Color` instance.
+     * Parses CSS color strings and converts colors to sRGB color space if needed.
+     * Officially supported color formats:
+     * - keyword, e.g. 'aquamarine' or 'steelblue'
+     * - hex (with 3, 4, 6 or 8 digits), e.g. '#f0f' or '#e9bebea9'
+     * - rgb and rgba, e.g. 'rgb(0,240,120)' or 'rgba(0%,94%,47%,0.1)' or 'rgb(0 240 120 / .3)'
+     * - hsl and hsla, e.g. 'hsl(0,0%,83%)' or 'hsla(0,0%,83%,.5)' or 'hsl(0 0% 83% / 20%)'
+     *
+     * @param input CSS color string to parse.
      * @returns A `Color` instance, or `undefined` if the input is not a valid color string.
      */
     static parse(input) {
-        if (!input) {
-            return undefined;
-        }
+        // in zoom-and-property function input could be an instance of Color class
         if (input instanceof Color) {
             return input;
         }
         if (typeof input !== 'string') {
-            return undefined;
+            return;
         }
-        const rgba = parseCSSColor_1(input);
-        if (!rgba) {
-            return undefined;
+        const rgba = parseCssColor(input.toLowerCase());
+        if (rgba) {
+            return new Color(...rgba, false);
         }
-        return new Color(rgba[0] / 255 * rgba[3], rgba[1] / 255 * rgba[3], rgba[2] / 255 * rgba[3], rgba[3]);
     }
     /**
-     * Returns an RGBA string representing the color value.
+     * Used in color interpolation and by 'to-rgba' expression.
      *
-     * @returns An RGBA string.
+     * @returns Gien color, with reversed alpha blending, in sRGB color space.
+     */
+    get rgb() {
+        const { r, g, b, a } = this;
+        const f = a || Infinity; // reverse alpha blending factor
+        return this.overwriteGetter('rgb', [r / f, g / f, b / f, a]);
+    }
+    /**
+     * Used in color interpolation.
+     *
+     * @returns Gien color, with reversed alpha blending, in HCL color space.
+     */
+    get hcl() {
+        return this.overwriteGetter('hcl', rgbToHcl(this.rgb));
+    }
+    /**
+     * Used in color interpolation.
+     *
+     * @returns Gien color, with reversed alpha blending, in LAB color space.
+     */
+    get lab() {
+        return this.overwriteGetter('lab', rgbToLab(this.rgb));
+    }
+    /**
+     * Lazy getter pattern. When getter is called for the first time lazy value
+     * is calculated and then overwrites getter function in given object instance.
+     *
+     * @example:
+     * const redColor = Color.parse('red');
+     * let x = redColor.hcl; // this will invoke `get hcl()`, which will calculate
+     * // the value of red in HCL space and invoke this `overwriteGetter` function
+     * // which in turn will set a field with a key 'hcl' in the `redColor` object.
+     * // In other words it will override `get hcl()` from its `Color` prototype
+     * // with its own property: hcl = [calculated red value in hcl].
+     * let y = redColor.hcl; // next call will no longer invoke getter but simply
+     * // return the previously calculated value
+     * x === y; // true - `x` is exactly the same object as `y`
+     *
+     * @param getterKey Getter key
+     * @param lazyValue Lazily calculated value to be memoized by current instance
+     * @private
+     */
+    overwriteGetter(getterKey, lazyValue) {
+        Object.defineProperty(this, getterKey, { value: lazyValue });
+        return lazyValue;
+    }
+    /**
+     * Used by 'to-string' expression.
+     *
+     * @returns Serialized color in format `rgba(r,g,b,a)`
+     * where r,g,b are numbers within 0..255 and alpha is number within 1..0
+     *
      * @example
      * var purple = new Color.parse('purple');
      * purple.toString; // = "rgba(128,0,128,1)"
@@ -4820,17 +5664,20 @@ class Color {
      * translucentGreen.toString(); // = "rgba(26,207,26,0.73)"
      */
     toString() {
-        const [r, g, b, a] = this.toArray();
-        return `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${a})`;
+        const [r, g, b, a] = this.rgb;
+        return `rgba(${[r, g, b].map(n => Math.round(n * 255)).join(',')},${a})`;
     }
-    toArray() {
-        const { r, g, b, a } = this;
-        return a === 0 ? [0, 0, 0, 0] : [
-            r * 255 / a,
-            g * 255 / a,
-            b * 255 / a,
-            a
-        ];
+}
+function parseCssColor(colorToParse) {
+    const parsingResult = colorString$1.get(colorToParse);
+    switch (parsingResult === null || parsingResult === void 0 ? void 0 : parsingResult.model) {
+        case 'rgb': {
+            const [r, g, b, alpha] = parsingResult.value;
+            return [r / 255, g / 255, b / 255, alpha];
+        }
+        case 'hsl': {
+            return hslToRgb(parsingResult.value);
+        }
     }
 }
 Color.black = new Color(0, 0, 0, 1);
@@ -4908,6 +5755,7 @@ class Padding {
     }
     /**
      * Numeric padding values
+     * @param input A padding value
      * @returns A `Padding` instance, or `undefined` if the input is not a valid padding value.
      */
     static parse(input) {
@@ -5356,112 +6204,150 @@ class EvaluationContext {
     }
 }
 
-class CompoundExpression {
-    constructor(name, type, evaluate, args) {
-        this.name = name;
-        this.type = type;
-        this._evaluate = evaluate;
-        this.args = args;
+/**
+ * State associated parsing at a given point in an expression tree.
+ * @private
+ */
+class ParsingContext {
+    constructor(registry, isConstantFunc, path = [], expectedType, scope = new Scope(), errors = []) {
+        this.registry = registry;
+        this.path = path;
+        this.key = path.map(part => `[${part}]`).join('');
+        this.scope = scope;
+        this.errors = errors;
+        this.expectedType = expectedType;
+        this._isConstant = isConstantFunc;
     }
-    evaluate(ctx) {
-        return this._evaluate(ctx, this.args);
-    }
-    eachChild(fn) {
-        this.args.forEach(fn);
-    }
-    outputDefined() {
-        return false;
-    }
-    static parse(args, context) {
-        const op = args[0];
-        const definition = CompoundExpression.definitions[op];
-        if (!definition) {
-            return context.error(`Unknown expression "${op}". If you wanted a literal array, use ["literal", [...]].`, 0);
+    /**
+     * @param expr the JSON expression to parse
+     * @param index the optional argument index if this expression is an argument of a parent expression that's being parsed
+     * @param options
+     * @param options.omitTypeAnnotations set true to omit inferred type annotations.  Caller beware: with this option set, the parsed expression's type will NOT satisfy `expectedType` if it would normally be wrapped in an inferred annotation.
+     * @private
+     */
+    parse(expr, index, expectedType, bindings, options = {}) {
+        if (index) {
+            return this.concat(index, expectedType, bindings)._parse(expr, options);
         }
-        // Now check argument types against each signature
-        const type = Array.isArray(definition) ?
-            definition[0] : definition.type;
-        const availableOverloads = Array.isArray(definition) ?
-            [[definition[1], definition[2]]] :
-            definition.overloads;
-        const overloads = availableOverloads.filter(([signature]) => (!Array.isArray(signature) || // varags
-            signature.length === args.length - 1 // correct param count
-        ));
-        let signatureContext = null;
-        for (const [params, evaluate] of overloads) {
-            // Use a fresh context for each attempted signature so that, if
-            // we eventually succeed, we haven't polluted `context.errors`.
-            signatureContext = new ParsingContext$1(context.registry, context.path, null, context.scope);
-            // First parse all the args, potentially coercing to the
-            // types expected by this overload.
-            const parsedArgs = [];
-            let argParseFailed = false;
-            for (let i = 1; i < args.length; i++) {
-                const arg = args[i];
-                const expectedType = Array.isArray(params) ?
-                    params[i - 1] :
-                    params.type;
-                const parsed = signatureContext.parse(arg, 1 + parsedArgs.length, expectedType);
-                if (!parsed) {
-                    argParseFailed = true;
-                    break;
-                }
-                parsedArgs.push(parsed);
+        return this._parse(expr, options);
+    }
+    _parse(expr, options) {
+        if (expr === null || typeof expr === 'string' || typeof expr === 'boolean' || typeof expr === 'number') {
+            expr = ['literal', expr];
+        }
+        function annotate(parsed, type, typeAnnotation) {
+            if (typeAnnotation === 'assert') {
+                return new Assertion(type, [parsed]);
             }
-            if (argParseFailed) {
-                // Couldn't coerce args of this overload to expected type, move
-                // on to next one.
-                continue;
+            else if (typeAnnotation === 'coerce') {
+                return new Coercion(type, [parsed]);
             }
-            if (Array.isArray(params)) {
-                if (params.length !== parsedArgs.length) {
-                    signatureContext.error(`Expected ${params.length} arguments, but found ${parsedArgs.length} instead.`);
-                    continue;
-                }
-            }
-            for (let i = 0; i < parsedArgs.length; i++) {
-                const expected = Array.isArray(params) ? params[i] : params.type;
-                const arg = parsedArgs[i];
-                signatureContext.concat(i + 1).checkSubtype(expected, arg.type);
-            }
-            if (signatureContext.errors.length === 0) {
-                return new CompoundExpression(op, type, evaluate, parsedArgs);
+            else {
+                return parsed;
             }
         }
-        if (overloads.length === 1) {
-            context.errors.push(...signatureContext.errors);
-        }
-        else {
-            const expected = overloads.length ? overloads : availableOverloads;
-            const signatures = expected
-                .map(([params]) => stringifySignature(params))
-                .join(' | ');
-            const actualTypes = [];
-            // For error message, re-parse arguments without trying to
-            // apply any coercions
-            for (let i = 1; i < args.length; i++) {
-                const parsed = context.parse(args[i], 1 + actualTypes.length);
+        if (Array.isArray(expr)) {
+            if (expr.length === 0) {
+                return this.error('Expected an array with at least one element. If you wanted a literal array, use ["literal", []].');
+            }
+            const op = expr[0];
+            if (typeof op !== 'string') {
+                this.error(`Expression name must be a string, but found ${typeof op} instead. If you wanted a literal array, use ["literal", [...]].`, 0);
+                return null;
+            }
+            const Expr = this.registry[op];
+            if (Expr) {
+                let parsed = Expr.parse(expr, this);
                 if (!parsed)
                     return null;
-                actualTypes.push(toString$1(parsed.type));
+                if (this.expectedType) {
+                    const expected = this.expectedType;
+                    const actual = parsed.type;
+                    // When we expect a number, string, boolean, or array but have a value, wrap it in an assertion.
+                    // When we expect a color or formatted string, but have a string or value, wrap it in a coercion.
+                    // Otherwise, we do static type-checking.
+                    //
+                    // These behaviors are overridable for:
+                    //   * The "coalesce" operator, which needs to omit type annotations.
+                    //   * String-valued properties (e.g. `text-field`), where coercion is more convenient than assertion.
+                    //
+                    if ((expected.kind === 'string' || expected.kind === 'number' || expected.kind === 'boolean' || expected.kind === 'object' || expected.kind === 'array') && actual.kind === 'value') {
+                        parsed = annotate(parsed, expected, options.typeAnnotation || 'assert');
+                    }
+                    else if ((expected.kind === 'color' || expected.kind === 'formatted' || expected.kind === 'resolvedImage') && (actual.kind === 'value' || actual.kind === 'string')) {
+                        parsed = annotate(parsed, expected, options.typeAnnotation || 'coerce');
+                    }
+                    else if (expected.kind === 'padding' && (actual.kind === 'value' || actual.kind === 'number' || actual.kind === 'array')) {
+                        parsed = annotate(parsed, expected, options.typeAnnotation || 'coerce');
+                    }
+                    else if (this.checkSubtype(expected, actual)) {
+                        return null;
+                    }
+                }
+                // If an expression's arguments are all literals, we can evaluate
+                // it immediately and replace it with a literal value in the
+                // parsed/compiled result. Expressions that expect an image should
+                // not be resolved here so we can later get the available images.
+                if (!(parsed instanceof Literal) && (parsed.type.kind !== 'resolvedImage') && this._isConstant(parsed)) {
+                    const ec = new EvaluationContext();
+                    try {
+                        parsed = new Literal(parsed.type, parsed.evaluate(ec));
+                    }
+                    catch (e) {
+                        this.error(e.message);
+                        return null;
+                    }
+                }
+                return parsed;
             }
-            context.error(`Expected arguments of type ${signatures}, but found (${actualTypes.join(', ')}) instead.`);
+            return this.error(`Unknown expression "${op}". If you wanted a literal array, use ["literal", [...]].`, 0);
         }
-        return null;
-    }
-    static register(registry, definitions) {
-        CompoundExpression.definitions = definitions;
-        for (const name in definitions) {
-            registry[name] = CompoundExpression;
+        else if (typeof expr === 'undefined') {
+            return this.error('\'undefined\' value invalid. Use null instead.');
+        }
+        else if (typeof expr === 'object') {
+            return this.error('Bare objects invalid. Use ["literal", {...}] instead.');
+        }
+        else {
+            return this.error(`Expected an array, but found ${typeof expr} instead.`);
         }
     }
-}
-function stringifySignature(signature) {
-    if (Array.isArray(signature)) {
-        return `(${signature.map(toString$1).join(', ')})`;
+    /**
+     * Returns a copy of this context suitable for parsing the subexpression at
+     * index `index`, optionally appending to 'let' binding map.
+     *
+     * Note that `errors` property, intended for collecting errors while
+     * parsing, is copied by reference rather than cloned.
+     * @private
+     */
+    concat(index, expectedType, bindings) {
+        const path = typeof index === 'number' ? this.path.concat(index) : this.path;
+        const scope = bindings ? this.scope.concat(bindings) : this.scope;
+        return new ParsingContext(this.registry, this._isConstant, path, expectedType || null, scope, this.errors);
     }
-    else {
-        return `(${toString$1(signature.type)}...)`;
+    /**
+     * Push a parsing (or type checking) error into the `this.errors`
+     * @param error The message
+     * @param keys Optionally specify the source of the error at a child
+     * of the current expression at `this.key`.
+     * @private
+     */
+    error(error, ...keys) {
+        const key = `${this.key}${keys.map(k => `[${k}]`).join('')}`;
+        this.errors.push(new ExpressionParsingError(key, error));
+    }
+    /**
+     * Returns null if `t` is a subtype of `expected`; otherwise returns an
+     * error message and also pushes it to `this.errors`.
+     * @param expected The expected type
+     * @param t The actual type
+     * @returns null if `t` is a subtype of `expected`; otherwise returns an error message
+     */
+    checkSubtype(expected, t) {
+        const error = checkSubtype(expected, t);
+        if (error)
+            this.error(error);
+        return error;
     }
 }
 
@@ -5811,6 +6697,177 @@ class Within {
     }
 }
 
+class Var {
+    constructor(name, boundExpression) {
+        this.type = boundExpression.type;
+        this.name = name;
+        this.boundExpression = boundExpression;
+    }
+    static parse(args, context) {
+        if (args.length !== 2 || typeof args[1] !== 'string')
+            return context.error('\'var\' expression requires exactly one string literal argument.');
+        const name = args[1];
+        if (!context.scope.has(name)) {
+            return context.error(`Unknown variable "${name}". Make sure "${name}" has been bound in an enclosing "let" expression before using it.`, 1);
+        }
+        return new Var(name, context.scope.get(name));
+    }
+    evaluate(ctx) {
+        return this.boundExpression.evaluate(ctx);
+    }
+    eachChild() { }
+    outputDefined() {
+        return false;
+    }
+}
+
+class CompoundExpression {
+    constructor(name, type, evaluate, args) {
+        this.name = name;
+        this.type = type;
+        this._evaluate = evaluate;
+        this.args = args;
+    }
+    evaluate(ctx) {
+        return this._evaluate(ctx, this.args);
+    }
+    eachChild(fn) {
+        this.args.forEach(fn);
+    }
+    outputDefined() {
+        return false;
+    }
+    static parse(args, context) {
+        const op = args[0];
+        const definition = CompoundExpression.definitions[op];
+        if (!definition) {
+            return context.error(`Unknown expression "${op}". If you wanted a literal array, use ["literal", [...]].`, 0);
+        }
+        // Now check argument types against each signature
+        const type = Array.isArray(definition) ?
+            definition[0] : definition.type;
+        const availableOverloads = Array.isArray(definition) ?
+            [[definition[1], definition[2]]] :
+            definition.overloads;
+        const overloads = availableOverloads.filter(([signature]) => (!Array.isArray(signature) || // varags
+            signature.length === args.length - 1 // correct param count
+        ));
+        let signatureContext = null;
+        for (const [params, evaluate] of overloads) {
+            // Use a fresh context for each attempted signature so that, if
+            // we eventually succeed, we haven't polluted `context.errors`.
+            signatureContext = new ParsingContext(context.registry, isExpressionConstant, context.path, null, context.scope);
+            // First parse all the args, potentially coercing to the
+            // types expected by this overload.
+            const parsedArgs = [];
+            let argParseFailed = false;
+            for (let i = 1; i < args.length; i++) {
+                const arg = args[i];
+                const expectedType = Array.isArray(params) ?
+                    params[i - 1] :
+                    params.type;
+                const parsed = signatureContext.parse(arg, 1 + parsedArgs.length, expectedType);
+                if (!parsed) {
+                    argParseFailed = true;
+                    break;
+                }
+                parsedArgs.push(parsed);
+            }
+            if (argParseFailed) {
+                // Couldn't coerce args of this overload to expected type, move
+                // on to next one.
+                continue;
+            }
+            if (Array.isArray(params)) {
+                if (params.length !== parsedArgs.length) {
+                    signatureContext.error(`Expected ${params.length} arguments, but found ${parsedArgs.length} instead.`);
+                    continue;
+                }
+            }
+            for (let i = 0; i < parsedArgs.length; i++) {
+                const expected = Array.isArray(params) ? params[i] : params.type;
+                const arg = parsedArgs[i];
+                signatureContext.concat(i + 1).checkSubtype(expected, arg.type);
+            }
+            if (signatureContext.errors.length === 0) {
+                return new CompoundExpression(op, type, evaluate, parsedArgs);
+            }
+        }
+        if (overloads.length === 1) {
+            context.errors.push(...signatureContext.errors);
+        }
+        else {
+            const expected = overloads.length ? overloads : availableOverloads;
+            const signatures = expected
+                .map(([params]) => stringifySignature(params))
+                .join(' | ');
+            const actualTypes = [];
+            // For error message, re-parse arguments without trying to
+            // apply any coercions
+            for (let i = 1; i < args.length; i++) {
+                const parsed = context.parse(args[i], 1 + actualTypes.length);
+                if (!parsed)
+                    return null;
+                actualTypes.push(toString$1(parsed.type));
+            }
+            context.error(`Expected arguments of type ${signatures}, but found (${actualTypes.join(', ')}) instead.`);
+        }
+        return null;
+    }
+    static register(registry, definitions) {
+        CompoundExpression.definitions = definitions;
+        for (const name in definitions) {
+            registry[name] = CompoundExpression;
+        }
+    }
+}
+function stringifySignature(signature) {
+    if (Array.isArray(signature)) {
+        return `(${signature.map(toString$1).join(', ')})`;
+    }
+    else {
+        return `(${toString$1(signature.type)}...)`;
+    }
+}
+function isExpressionConstant(expression) {
+    if (expression instanceof Var) {
+        return isExpressionConstant(expression.boundExpression);
+    }
+    else if (expression instanceof CompoundExpression && expression.name === 'error') {
+        return false;
+    }
+    else if (expression instanceof CollatorExpression) {
+        // Although the results of a Collator expression with fixed arguments
+        // generally shouldn't change between executions, we can't serialize them
+        // as constant expressions because results change based on environment.
+        return false;
+    }
+    else if (expression instanceof Within) {
+        return false;
+    }
+    const isTypeAnnotation = expression instanceof Coercion ||
+        expression instanceof Assertion;
+    let childrenConstant = true;
+    expression.eachChild(child => {
+        // We can _almost_ assume that if `expressions` children are constant,
+        // they would already have been evaluated to Literal values when they
+        // were parsed.  Type annotations are the exception, because they might
+        // have been inferred and added after a child was parsed.
+        // So we recurse into isConstant() for the children of type annotations,
+        // but otherwise simply check whether they are Literals.
+        if (isTypeAnnotation) {
+            childrenConstant = childrenConstant && isExpressionConstant(child);
+        }
+        else {
+            childrenConstant = childrenConstant && child instanceof Literal;
+        }
+    });
+    if (!childrenConstant) {
+        return false;
+    }
+    return isFeatureConstant(expression) &&
+        isGlobalPropertyConstant(expression, ['zoom', 'heatmap-density', 'line-progress', 'accumulated', 'is-supported-script']);
+}
 function isFeatureConstant(e) {
     if (e instanceof CompoundExpression) {
         if (e.name === 'get' && e.args.length === 1) {
@@ -5867,213 +6924,6 @@ function isGlobalPropertyConstant(e, properties) {
         }
     });
     return result;
-}
-
-class Var {
-    constructor(name, boundExpression) {
-        this.type = boundExpression.type;
-        this.name = name;
-        this.boundExpression = boundExpression;
-    }
-    static parse(args, context) {
-        if (args.length !== 2 || typeof args[1] !== 'string')
-            return context.error('\'var\' expression requires exactly one string literal argument.');
-        const name = args[1];
-        if (!context.scope.has(name)) {
-            return context.error(`Unknown variable "${name}". Make sure "${name}" has been bound in an enclosing "let" expression before using it.`, 1);
-        }
-        return new Var(name, context.scope.get(name));
-    }
-    evaluate(ctx) {
-        return this.boundExpression.evaluate(ctx);
-    }
-    eachChild() { }
-    outputDefined() {
-        return false;
-    }
-}
-
-/**
- * State associated parsing at a given point in an expression tree.
- * @private
- */
-class ParsingContext {
-    constructor(registry, path = [], expectedType, scope = new Scope(), errors = []) {
-        this.registry = registry;
-        this.path = path;
-        this.key = path.map(part => `[${part}]`).join('');
-        this.scope = scope;
-        this.errors = errors;
-        this.expectedType = expectedType;
-    }
-    /**
-     * @param expr the JSON expression to parse
-     * @param index the optional argument index if this expression is an argument of a parent expression that's being parsed
-     * @param options
-     * @param options.omitTypeAnnotations set true to omit inferred type annotations.  Caller beware: with this option set, the parsed expression's type will NOT satisfy `expectedType` if it would normally be wrapped in an inferred annotation.
-     * @private
-     */
-    parse(expr, index, expectedType, bindings, options = {}) {
-        if (index) {
-            return this.concat(index, expectedType, bindings)._parse(expr, options);
-        }
-        return this._parse(expr, options);
-    }
-    _parse(expr, options) {
-        if (expr === null || typeof expr === 'string' || typeof expr === 'boolean' || typeof expr === 'number') {
-            expr = ['literal', expr];
-        }
-        function annotate(parsed, type, typeAnnotation) {
-            if (typeAnnotation === 'assert') {
-                return new Assertion(type, [parsed]);
-            }
-            else if (typeAnnotation === 'coerce') {
-                return new Coercion(type, [parsed]);
-            }
-            else {
-                return parsed;
-            }
-        }
-        if (Array.isArray(expr)) {
-            if (expr.length === 0) {
-                return this.error('Expected an array with at least one element. If you wanted a literal array, use ["literal", []].');
-            }
-            const op = expr[0];
-            if (typeof op !== 'string') {
-                this.error(`Expression name must be a string, but found ${typeof op} instead. If you wanted a literal array, use ["literal", [...]].`, 0);
-                return null;
-            }
-            const Expr = this.registry[op];
-            if (Expr) {
-                let parsed = Expr.parse(expr, this);
-                if (!parsed)
-                    return null;
-                if (this.expectedType) {
-                    const expected = this.expectedType;
-                    const actual = parsed.type;
-                    // When we expect a number, string, boolean, or array but have a value, wrap it in an assertion.
-                    // When we expect a color or formatted string, but have a string or value, wrap it in a coercion.
-                    // Otherwise, we do static type-checking.
-                    //
-                    // These behaviors are overridable for:
-                    //   * The "coalesce" operator, which needs to omit type annotations.
-                    //   * String-valued properties (e.g. `text-field`), where coercion is more convenient than assertion.
-                    //
-                    if ((expected.kind === 'string' || expected.kind === 'number' || expected.kind === 'boolean' || expected.kind === 'object' || expected.kind === 'array') && actual.kind === 'value') {
-                        parsed = annotate(parsed, expected, options.typeAnnotation || 'assert');
-                    }
-                    else if ((expected.kind === 'color' || expected.kind === 'formatted' || expected.kind === 'resolvedImage') && (actual.kind === 'value' || actual.kind === 'string')) {
-                        parsed = annotate(parsed, expected, options.typeAnnotation || 'coerce');
-                    }
-                    else if (expected.kind === 'padding' && (actual.kind === 'value' || actual.kind === 'number' || actual.kind === 'array')) {
-                        parsed = annotate(parsed, expected, options.typeAnnotation || 'coerce');
-                    }
-                    else if (this.checkSubtype(expected, actual)) {
-                        return null;
-                    }
-                }
-                // If an expression's arguments are all literals, we can evaluate
-                // it immediately and replace it with a literal value in the
-                // parsed/compiled result. Expressions that expect an image should
-                // not be resolved here so we can later get the available images.
-                if (!(parsed instanceof Literal) && (parsed.type.kind !== 'resolvedImage') && isConstant(parsed)) {
-                    const ec = new EvaluationContext();
-                    try {
-                        parsed = new Literal(parsed.type, parsed.evaluate(ec));
-                    }
-                    catch (e) {
-                        this.error(e.message);
-                        return null;
-                    }
-                }
-                return parsed;
-            }
-            return this.error(`Unknown expression "${op}". If you wanted a literal array, use ["literal", [...]].`, 0);
-        }
-        else if (typeof expr === 'undefined') {
-            return this.error('\'undefined\' value invalid. Use null instead.');
-        }
-        else if (typeof expr === 'object') {
-            return this.error('Bare objects invalid. Use ["literal", {...}] instead.');
-        }
-        else {
-            return this.error(`Expected an array, but found ${typeof expr} instead.`);
-        }
-    }
-    /**
-     * Returns a copy of this context suitable for parsing the subexpression at
-     * index `index`, optionally appending to 'let' binding map.
-     *
-     * Note that `errors` property, intended for collecting errors while
-     * parsing, is copied by reference rather than cloned.
-     * @private
-     */
-    concat(index, expectedType, bindings) {
-        const path = typeof index === 'number' ? this.path.concat(index) : this.path;
-        const scope = bindings ? this.scope.concat(bindings) : this.scope;
-        return new ParsingContext(this.registry, path, expectedType || null, scope, this.errors);
-    }
-    /**
-     * Push a parsing (or type checking) error into the `this.errors`
-     * @param error The message
-     * @param keys Optionally specify the source of the error at a child
-     * of the current expression at `this.key`.
-     * @private
-     */
-    error(error, ...keys) {
-        const key = `${this.key}${keys.map(k => `[${k}]`).join('')}`;
-        this.errors.push(new ExpressionParsingError(key, error));
-    }
-    /**
-     * Returns null if `t` is a subtype of `expected`; otherwise returns an
-     * error message and also pushes it to `this.errors`.
-     */
-    checkSubtype(expected, t) {
-        const error = checkSubtype(expected, t);
-        if (error)
-            this.error(error);
-        return error;
-    }
-}
-var ParsingContext$1 = ParsingContext;
-function isConstant(expression) {
-    if (expression instanceof Var) {
-        return isConstant(expression.boundExpression);
-    }
-    else if (expression instanceof CompoundExpression && expression.name === 'error') {
-        return false;
-    }
-    else if (expression instanceof CollatorExpression) {
-        // Although the results of a Collator expression with fixed arguments
-        // generally shouldn't change between executions, we can't serialize them
-        // as constant expressions because results change based on environment.
-        return false;
-    }
-    else if (expression instanceof Within) {
-        return false;
-    }
-    const isTypeAnnotation = expression instanceof Coercion ||
-        expression instanceof Assertion;
-    let childrenConstant = true;
-    expression.eachChild(child => {
-        // We can _almost_ assume that if `expressions` children are constant,
-        // they would already have been evaluated to Literal values when they
-        // were parsed.  Type annotations are the exception, because they might
-        // have been inferred and added after a child was parsed.
-        // So we recurse into isConstant() for the children of type annotations,
-        // but otherwise simply check whether they are Literals.
-        if (isTypeAnnotation) {
-            childrenConstant = childrenConstant && isConstant(child);
-        }
-        else {
-            childrenConstant = childrenConstant && child instanceof Literal;
-        }
-    });
-    if (!childrenConstant) {
-        return false;
-    }
-    return isFeatureConstant(expression) &&
-        isGlobalPropertyConstant(expression, ['zoom', 'heatmap-density', 'line-progress', 'accumulated', 'is-supported-script']);
 }
 
 /**
@@ -6179,11 +7029,79 @@ class Step {
     }
 }
 
-function number(a, b, t) {
-    return (a * (1 - t)) + (b * t);
+/**
+ * Checks whether the specified color space is one of the supported interpolation color spaces.
+ *
+ * @param colorSpace Color space key to verify.
+ * @returns `true` if the specified color space is one of the supported
+ * interpolation color spaces, `false` otherwise
+ */
+function isSupportedInterpolationColorSpace(colorSpace) {
+    return colorSpace === 'rgb' || colorSpace === 'hcl' || colorSpace === 'lab';
 }
-function color(from, to, t) {
-    return new Color(number(from.r, to.r, t), number(from.g, to.g, t), number(from.b, to.b, t), number(from.a, to.a, t));
+/**
+ * @param interpolationType Interpolation type
+ * @returns interpolation fn
+ * @deprecated use `interpolate[type]` instead
+ */
+const interpolateFactory = (interpolationType) => {
+    switch (interpolationType) {
+        case 'number': return number;
+        case 'color': return color;
+        case 'array': return array;
+        case 'padding': return padding;
+    }
+};
+function number(from, to, t) {
+    return from + t * (to - from);
+}
+function color(from, to, t, spaceKey = 'rgb') {
+    switch (spaceKey) {
+        case 'rgb': {
+            const [r, g, b, alpha] = array(from.rgb, to.rgb, t);
+            return new Color(r, g, b, alpha, false);
+        }
+        case 'hcl': {
+            const [hue0, chroma0, light0, alphaF] = from.hcl;
+            const [hue1, chroma1, light1, alphaT] = to.hcl;
+            // https://github.com/gka/chroma.js/blob/cd1b3c0926c7a85cbdc3b1453b3a94006de91a92/src/interpolator/_hsx.js
+            let hue, chroma;
+            if (!isNaN(hue0) && !isNaN(hue1)) {
+                let dh = hue1 - hue0;
+                if (hue1 > hue0 && dh > 180) {
+                    dh -= 360;
+                }
+                else if (hue1 < hue0 && hue0 - hue1 > 180) {
+                    dh += 360;
+                }
+                hue = hue0 + t * dh;
+            }
+            else if (!isNaN(hue0)) {
+                hue = hue0;
+                if (light1 === 1 || light1 === 0)
+                    chroma = chroma0;
+            }
+            else if (!isNaN(hue1)) {
+                hue = hue1;
+                if (light0 === 1 || light0 === 0)
+                    chroma = chroma1;
+            }
+            else {
+                hue = NaN;
+            }
+            const [r, g, b, alpha] = hclToRgb([
+                hue,
+                chroma !== null && chroma !== void 0 ? chroma : number(chroma0, chroma1, t),
+                number(light0, light1, t),
+                number(alphaF, alphaT, t),
+            ]);
+            return new Color(r, g, b, alpha, false);
+        }
+        case 'lab': {
+            const [r, g, b, alpha] = labToRgb(array(from.lab, to.lab, t));
+            return new Color(r, g, b, alpha, false);
+        }
+    }
 }
 function array(from, to, t) {
     return from.map((d, i) => {
@@ -6191,115 +7109,14 @@ function array(from, to, t) {
     });
 }
 function padding(from, to, t) {
-    const fromVal = from.values;
-    const toVal = to.values;
-    return new Padding([
-        number(fromVal[0], toVal[0], t),
-        number(fromVal[1], toVal[1], t),
-        number(fromVal[2], toVal[2], t),
-        number(fromVal[3], toVal[3], t)
-    ]);
+    return new Padding(array(from.values, to.values, t));
 }
-
-var interpolate = /*#__PURE__*/Object.freeze({
-__proto__: null,
-array: array,
-color: color,
-number: number,
-padding: padding
-});
-
-// Constants
-const Xn = 0.950470, // D65 standard referent
-Yn = 1, Zn = 1.088830, t0 = 4 / 29, t1 = 6 / 29, t2 = 3 * t1 * t1, t3 = t1 * t1 * t1, deg2rad = Math.PI / 180, rad2deg = 180 / Math.PI;
-// Utilities
-function xyz2lab(t) {
-    return t > t3 ? Math.pow(t, 1 / 3) : t / t2 + t0;
-}
-function lab2xyz(t) {
-    return t > t1 ? t * t * t : t2 * (t - t0);
-}
-function xyz2rgb(x) {
-    return 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
-}
-function rgb2xyz(x) {
-    x /= 255;
-    return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
-}
-// LAB
-function rgbToLab(rgbColor) {
-    const b = rgb2xyz(rgbColor.r), a = rgb2xyz(rgbColor.g), l = rgb2xyz(rgbColor.b), x = xyz2lab((0.4124564 * b + 0.3575761 * a + 0.1804375 * l) / Xn), y = xyz2lab((0.2126729 * b + 0.7151522 * a + 0.0721750 * l) / Yn), z = xyz2lab((0.0193339 * b + 0.1191920 * a + 0.9503041 * l) / Zn);
-    return {
-        l: 116 * y - 16,
-        a: 500 * (x - y),
-        b: 200 * (y - z),
-        alpha: rgbColor.a
-    };
-}
-function labToRgb(labColor) {
-    let y = (labColor.l + 16) / 116, x = isNaN(labColor.a) ? y : y + labColor.a / 500, z = isNaN(labColor.b) ? y : y - labColor.b / 200;
-    y = Yn * lab2xyz(y);
-    x = Xn * lab2xyz(x);
-    z = Zn * lab2xyz(z);
-    return new Color(xyz2rgb(3.2404542 * x - 1.5371385 * y - 0.4985314 * z), // D65 -> sRGB
-    xyz2rgb(-0.9692660 * x + 1.8760108 * y + 0.0415560 * z), xyz2rgb(0.0556434 * x - 0.2040259 * y + 1.0572252 * z), labColor.alpha);
-}
-function interpolateLab(from, to, t) {
-    return {
-        l: number(from.l, to.l, t),
-        a: number(from.a, to.a, t),
-        b: number(from.b, to.b, t),
-        alpha: number(from.alpha, to.alpha, t)
-    };
-}
-// HCL
-function rgbToHcl(rgbColor) {
-    const { l, a, b } = rgbToLab(rgbColor);
-    const h = Math.atan2(b, a) * rad2deg;
-    return {
-        h: h < 0 ? h + 360 : h,
-        c: Math.sqrt(a * a + b * b),
-        l,
-        alpha: rgbColor.a
-    };
-}
-function hclToRgb(hclColor) {
-    const h = hclColor.h * deg2rad, c = hclColor.c, l = hclColor.l;
-    return labToRgb({
-        l,
-        a: Math.cos(h) * c,
-        b: Math.sin(h) * c,
-        alpha: hclColor.alpha
-    });
-}
-function interpolateHue(a, b, t) {
-    const d = b - a;
-    return a + t * (d > 180 || d < -180 ? d - 360 * Math.round(d / 360) : d);
-}
-function interpolateHcl(from, to, t) {
-    return {
-        h: interpolateHue(from.h, to.h, t),
-        c: number(from.c, to.c, t),
-        l: number(from.l, to.l, t),
-        alpha: number(from.alpha, to.alpha, t)
-    };
-}
-const lab = {
-    forward: rgbToLab,
-    reverse: labToRgb,
-    interpolate: interpolateLab
+const interpolate = {
+    number,
+    color,
+    array,
+    padding,
 };
-const hcl = {
-    forward: rgbToHcl,
-    reverse: hclToRgb,
-    interpolate: interpolateHcl
-};
-
-var colorSpaces = /*#__PURE__*/Object.freeze({
-__proto__: null,
-hcl: hcl,
-lab: lab
-});
 
 class Interpolate {
     constructor(type, operator, interpolation, input, stops) {
@@ -6324,7 +7141,7 @@ class Interpolate {
         }
         else if (interpolation.name === 'cubic-bezier') {
             const c = interpolation.controlPoints;
-            const ub = new unitbezier(c[0], c[1], c[2], c[3]);
+            const ub = new UnitBezier$1(c[0], c[1], c[2], c[3]);
             t = ub.solve(exponentialInterpolation(input, 1, lower, upper));
         }
         return t;
@@ -6394,12 +7211,10 @@ class Interpolate {
             outputType = outputType || parsed.type;
             stops.push([label, parsed]);
         }
-        if (outputType.kind !== 'number' &&
-            outputType.kind !== 'color' &&
-            outputType.kind !== 'padding' &&
-            !(outputType.kind === 'array' &&
-                outputType.itemType.kind === 'number' &&
-                typeof outputType.N === 'number')) {
+        if (!verifyType(outputType, NumberType) &&
+            !verifyType(outputType, ColorType) &&
+            !verifyType(outputType, PaddingType) &&
+            !verifyType(outputType, array$1(NumberType))) {
             return context.error(`Type ${toString$1(outputType)} is not interpolatable.`);
         }
         return new Interpolate(outputType, operator, interpolation, input, stops);
@@ -6424,14 +7239,13 @@ class Interpolate {
         const t = Interpolate.interpolationFactor(this.interpolation, value, lower, upper);
         const outputLower = outputs[index].evaluate(ctx);
         const outputUpper = outputs[index + 1].evaluate(ctx);
-        if (this.operator === 'interpolate') {
-            return interpolate[this.type.kind.toLowerCase()](outputLower, outputUpper, t); // eslint-disable-line import/namespace
-        }
-        else if (this.operator === 'interpolate-hcl') {
-            return hcl.reverse(hcl.interpolate(hcl.forward(outputLower), hcl.forward(outputUpper), t));
-        }
-        else {
-            return lab.reverse(lab.interpolate(lab.forward(outputLower), lab.forward(outputUpper), t));
+        switch (this.operator) {
+            case 'interpolate':
+                return interpolate[this.type.kind](outputLower, outputUpper, t);
+            case 'interpolate-hcl':
+                return interpolate.color(outputLower, outputUpper, t, 'hcl');
+            case 'interpolate-lab':
+                return interpolate.color(outputLower, outputUpper, t, 'lab');
         }
     }
     eachChild(fn) {
@@ -7336,7 +8150,7 @@ function rgba(ctx, [r, g, b, a]) {
     const error = validateRGBA(r, g, b, alpha);
     if (error)
         throw new RuntimeError(error);
-    return new Color(r / 255 * alpha, g / 255 * alpha, b / 255 * alpha, alpha);
+    return new Color(r / 255, g / 255, b / 255, alpha, false);
 }
 function has(key, obj) {
     return key in obj;
@@ -7375,8 +8189,9 @@ CompoundExpression.register(expressions, {
         array$1(NumberType, 4),
         [ColorType],
         (ctx, [v]) => {
-            return v.evaluate(ctx).toArray();
-        }
+            const [r, g, b, a] = v.evaluate(ctx).rgb;
+            return [r * 255, g * 255, b * 255, a];
+        },
     ],
     'rgb': [
         ColorType,
@@ -7863,8 +8678,8 @@ function createFunction(parameters, propertySpec) {
             parameters.default = parseFn(propertySpec.default);
         }
     }
-    if (parameters.colorSpace && parameters.colorSpace !== 'rgb' && !colorSpaces[parameters.colorSpace]) { // eslint-disable-line import/namespace
-        throw new Error(`Unknown color space: ${parameters.colorSpace}`);
+    if (parameters.colorSpace && !isSupportedInterpolationColorSpace(parameters.colorSpace)) {
+        throw new Error(`Unknown color space: "${parameters.colorSpace}"`);
     }
     let innerFun;
     let hashedStops;
@@ -7944,14 +8759,14 @@ function createFunction(parameters, propertySpec) {
             evaluate(_, feature) {
                 const value = feature && feature.properties ? feature.properties[parameters.property] : undefined;
                 if (value === undefined) {
-                    return coalesce(parameters.default, propertySpec.default);
+                    return coalesce$1(parameters.default, propertySpec.default);
                 }
                 return innerFun(parameters, propertySpec, value, hashedStops, categoricalKeyType);
             }
         };
     }
 }
-function coalesce(a, b, c) {
+function coalesce$1(a, b, c) {
     if (a !== undefined)
         return a;
     if (b !== undefined)
@@ -7961,12 +8776,12 @@ function coalesce(a, b, c) {
 }
 function evaluateCategoricalFunction(parameters, propertySpec, input, hashedStops, keyType) {
     const evaluated = typeof input === keyType ? hashedStops[input] : undefined; // Enforce strict typing on input
-    return coalesce(evaluated, parameters.default, propertySpec.default);
+    return coalesce$1(evaluated, parameters.default, propertySpec.default);
 }
 function evaluateIntervalFunction(parameters, propertySpec, input) {
     // Edge cases
     if (getType(input) !== 'number')
-        return coalesce(parameters.default, propertySpec.default);
+        return coalesce$1(parameters.default, propertySpec.default);
     const n = parameters.stops.length;
     if (n === 1)
         return parameters.stops[0][1];
@@ -7981,7 +8796,7 @@ function evaluateExponentialFunction(parameters, propertySpec, input) {
     const base = parameters.base !== undefined ? parameters.base : 1;
     // Edge cases
     if (getType(input) !== 'number')
-        return coalesce(parameters.default, propertySpec.default);
+        return coalesce$1(parameters.default, propertySpec.default);
     const n = parameters.stops.length;
     if (n === 1)
         return parameters.stops[0][1];
@@ -7993,11 +8808,7 @@ function evaluateExponentialFunction(parameters, propertySpec, input) {
     const t = interpolationFactor(input, base, parameters.stops[index][0], parameters.stops[index + 1][0]);
     const outputLower = parameters.stops[index][1];
     const outputUpper = parameters.stops[index + 1][1];
-    let interp = interpolate[propertySpec.type] || identityFunction; // eslint-disable-line import/namespace
-    if (parameters.colorSpace && parameters.colorSpace !== 'rgb') {
-        const colorspace = colorSpaces[parameters.colorSpace]; // eslint-disable-line import/namespace
-        interp = (a, b) => colorspace.reverse(colorspace.interpolate(colorspace.forward(a), colorspace.forward(b), t));
-    }
+    const interp = interpolate[propertySpec.type] || identityFunction;
     if (typeof outputLower.evaluate === 'function') {
         return {
             evaluate(...args) {
@@ -8007,11 +8818,11 @@ function evaluateExponentialFunction(parameters, propertySpec, input) {
                 if (evaluatedLower === undefined || evaluatedUpper === undefined) {
                     return undefined;
                 }
-                return interp(evaluatedLower, evaluatedUpper, t);
+                return interp(evaluatedLower, evaluatedUpper, t, parameters.colorSpace);
             }
         };
     }
-    return interp(outputLower, outputUpper, t);
+    return interp(outputLower, outputUpper, t, parameters.colorSpace);
 }
 function evaluateIdentityFunction(parameters, propertySpec, input) {
     switch (propertySpec.type) {
@@ -8032,7 +8843,7 @@ function evaluateIdentityFunction(parameters, propertySpec, input) {
                 input = undefined;
             }
     }
-    return coalesce(input, parameters.default, propertySpec.default);
+    return coalesce$1(input, parameters.default, propertySpec.default);
 }
 /**
  * Returns a ratio that can be used to interpolate between exponential function
@@ -8146,7 +8957,7 @@ function isExpression(expression) {
  * @private
  */
 function createExpression(expression, propertySpec) {
-    const parser = new ParsingContext$1(expressions, [], propertySpec ? getExpectedType(propertySpec) : undefined);
+    const parser = new ParsingContext(expressions, isExpressionConstant, [], propertySpec ? getExpectedType(propertySpec) : undefined);
     // For string-valued properties, coerce to string at the top level rather than asserting.
     const parsed = parser.parse(expression, undefined, undefined, undefined, propertySpec && propertySpec.type === 'string' ? { typeAnnotation: 'coerce' } : undefined);
     if (!parsed) {
@@ -8196,8 +9007,8 @@ function createPropertyExpression(expressionInput, propertySpec) {
         return expression;
     }
     const parsed = expression.value.expression;
-    const isFeatureConstant$1 = isFeatureConstant(parsed);
-    if (!isFeatureConstant$1 && !supportsPropertyExpression(propertySpec)) {
+    const isFeatureConstantResult = isFeatureConstant(parsed);
+    if (!isFeatureConstantResult && !supportsPropertyExpression(propertySpec)) {
         return error([new ExpressionParsingError('', 'data expressions not supported')]);
     }
     const isZoomConstant = isGlobalPropertyConstant(parsed, ['zoom']);
@@ -8215,12 +9026,12 @@ function createPropertyExpression(expressionInput, propertySpec) {
         return error([new ExpressionParsingError('', '"interpolate" expressions cannot be used with this property')]);
     }
     if (!zoomCurve) {
-        return success(isFeatureConstant$1 ?
+        return success(isFeatureConstantResult ?
             new ZoomConstantExpression('constant', expression.value) :
             new ZoomConstantExpression('source', expression.value));
     }
     const interpolationType = zoomCurve instanceof Interpolate ? zoomCurve.interpolation : undefined;
-    return success(isFeatureConstant$1 ?
+    return success(isFeatureConstantResult ?
         new ZoomDependentExpression('camera', expression.value, zoomCurve.labels, interpolationType) :
         new ZoomDependentExpression('composite', expression.value, zoomCurve.labels, interpolationType));
 }
@@ -8341,6 +9152,779 @@ function getDefaultValue(spec) {
     else {
         return spec.default;
     }
+}
+
+function isExpressionFilter(filter) {
+    if (filter === true || filter === false) {
+        return true;
+    }
+    if (!Array.isArray(filter) || filter.length === 0) {
+        return false;
+    }
+    switch (filter[0]) {
+        case 'has':
+            return filter.length >= 2 && filter[1] !== '$id' && filter[1] !== '$type';
+        case 'in':
+            return filter.length >= 3 && (typeof filter[1] !== 'string' || Array.isArray(filter[2]));
+        case '!in':
+        case '!has':
+        case 'none':
+            return false;
+        case '==':
+        case '!=':
+        case '>':
+        case '>=':
+        case '<':
+        case '<=':
+            return filter.length !== 3 || (Array.isArray(filter[1]) || Array.isArray(filter[2]));
+        case 'any':
+        case 'all':
+            for (const f of filter.slice(1)) {
+                if (!isExpressionFilter(f) && typeof f !== 'boolean') {
+                    return false;
+                }
+            }
+            return true;
+        default:
+            return true;
+    }
+}
+const filterSpec = {
+    'type': 'boolean',
+    'default': false,
+    'transition': false,
+    'property-type': 'data-driven',
+    'expression': {
+        'interpolated': false,
+        'parameters': ['zoom', 'feature']
+    }
+};
+/**
+ * Given a filter expressed as nested arrays, return a new function
+ * that evaluates whether a given feature (with a .properties or .tags property)
+ * passes its test.
+ *
+ * @private
+ * @param {Array} filter maplibre gl filter
+ * @returns {Function} filter-evaluating function
+ */
+function createFilter(filter) {
+    if (filter === null || filter === undefined) {
+        return { filter: () => true, needGeometry: false };
+    }
+    if (!isExpressionFilter(filter)) {
+        filter = convertFilter$1(filter);
+    }
+    const compiled = createExpression(filter, filterSpec);
+    if (compiled.result === 'error') {
+        throw new Error(compiled.value.map(err => `${err.key}: ${err.message}`).join(', '));
+    }
+    else {
+        const needGeometry = geometryNeeded(filter);
+        return { filter: (globalProperties, feature, canonical) => compiled.value.evaluate(globalProperties, feature, {}, canonical),
+            needGeometry };
+    }
+}
+// Comparison function to sort numbers and strings
+function compare(a, b) {
+    return a < b ? -1 : a > b ? 1 : 0;
+}
+function geometryNeeded(filter) {
+    if (!Array.isArray(filter))
+        return false;
+    if (filter[0] === 'within')
+        return true;
+    for (let index = 1; index < filter.length; index++) {
+        if (geometryNeeded(filter[index]))
+            return true;
+    }
+    return false;
+}
+function convertFilter$1(filter) {
+    if (!filter)
+        return true;
+    const op = filter[0];
+    if (filter.length <= 1)
+        return (op !== 'any');
+    const converted = op === '==' ? convertComparisonOp$1(filter[1], filter[2], '==') :
+        op === '!=' ? convertNegation(convertComparisonOp$1(filter[1], filter[2], '==')) :
+            op === '<' ||
+                op === '>' ||
+                op === '<=' ||
+                op === '>=' ? convertComparisonOp$1(filter[1], filter[2], op) :
+                op === 'any' ? convertDisjunctionOp(filter.slice(1)) :
+                    op === 'all' ? ['all'].concat(filter.slice(1).map(convertFilter$1)) :
+                        op === 'none' ? ['all'].concat(filter.slice(1).map(convertFilter$1).map(convertNegation)) :
+                            op === 'in' ? convertInOp$1(filter[1], filter.slice(2)) :
+                                op === '!in' ? convertNegation(convertInOp$1(filter[1], filter.slice(2))) :
+                                    op === 'has' ? convertHasOp$1(filter[1]) :
+                                        op === '!has' ? convertNegation(convertHasOp$1(filter[1])) :
+                                            op === 'within' ? filter :
+                                                true;
+    return converted;
+}
+function convertComparisonOp$1(property, value, op) {
+    switch (property) {
+        case '$type':
+            return [`filter-type-${op}`, value];
+        case '$id':
+            return [`filter-id-${op}`, value];
+        default:
+            return [`filter-${op}`, property, value];
+    }
+}
+function convertDisjunctionOp(filters) {
+    return ['any'].concat(filters.map(convertFilter$1));
+}
+function convertInOp$1(property, values) {
+    if (values.length === 0) {
+        return false;
+    }
+    switch (property) {
+        case '$type':
+            return ['filter-type-in', ['literal', values]];
+        case '$id':
+            return ['filter-id-in', ['literal', values]];
+        default:
+            if (values.length > 200 && !values.some(v => typeof v !== typeof values[0])) {
+                return ['filter-in-large', property, ['literal', values.sort(compare)]];
+            }
+            else {
+                return ['filter-in-small', property, ['literal', values]];
+            }
+    }
+}
+function convertHasOp$1(property) {
+    switch (property) {
+        case '$type':
+            return true;
+        case '$id':
+            return ['filter-has-id'];
+        default:
+            return ['filter-has', property];
+    }
+}
+function convertNegation(filter) {
+    return ['!', filter];
+}
+
+/*
+ * Convert the given filter to an expression, storing the expected types for
+ * any feature properties referenced in expectedTypes.
+ *
+ * These expected types are needed in order to construct preflight type checks
+ * needed for handling 'any' filters. A preflight type check is necessary in
+ * order to mimic legacy filters' semantics around expected type mismatches.
+ * For example, consider the legacy filter:
+ *
+ *     ["any", ["all", [">", "y", 0], [">", "y", 0]], [">", "x", 0]]
+ *
+ * Naively, we might convert this to the expression:
+ *
+ *     ["any", ["all", [">", ["get", "y"], 0], [">", ["get", "z"], 0]], [">", ["get", "x"], 0]]
+ *
+ * But if we tried to evaluate this against, say `{x: 1, y: null, z: 0}`, the
+ * [">", ["get", "y"], 0] would cause an evaluation error, leading to the
+ * entire filter returning false. Legacy filter semantics, though, ask for
+ * [">", "y", 0] to simply return `false` when `y` is of the wrong type,
+ * allowing the subsequent terms of the outer "any" expression to be evaluated
+ * (resulting, in this case, in a `true` value, because x > 0).
+ *
+ * We account for this by inserting a preflight type-checking expression before
+ * each "any" term, allowing us to avoid evaluating the actual converted filter
+ * if any type mismatches would cause it to produce an evalaution error:
+ *
+ *     ["any",
+ *       ["case",
+ *         ["all", ["==", ["typeof", ["get", "y"]], "number"], ["==", ["typeof", ["get", "z"], "number]],
+ *         ["all", [">", ["get", "y"], 0], [">", ["get", "z"], 0]],
+ *         false
+ *       ],
+ *       ["case",
+ *         ["==", ["typeof", ["get", "x"], "number"]],
+ *         [">", ["get", "x"], 0],
+ *         false
+ *       ]
+ *     ]
+ *
+ * An alternative, possibly more direct approach would be to use type checks
+ * in the conversion of each comparison operator, so that the converted version
+ * of each individual ==, >=, etc. would mimic the legacy filter semantics. The
+ * downside of this approach is that it can lead to many more type checks than
+ * would otherwise be necessary: outside the context of an "any" expression,
+ * bailing out due to a runtime type error (expression semantics) and returning
+ * false (legacy filter semantics) are equivalent: they cause the filter to
+ * produce a `false` result.
+ */
+function convertFilter(filter, expectedTypes = {}) {
+    if (isExpressionFilter(filter))
+        return filter;
+    if (!filter)
+        return true;
+    const legacyFilter = filter;
+    const legacyOp = legacyFilter[0];
+    if (filter.length <= 1)
+        return (legacyOp !== 'any');
+    switch (legacyOp) {
+        case '==':
+        case '!=':
+        case '<':
+        case '>':
+        case '<=':
+        case '>=': {
+            const [, property, value] = filter;
+            return convertComparisonOp(property, value, legacyOp, expectedTypes);
+        }
+        case 'any': {
+            const [, ...conditions] = legacyFilter;
+            const children = conditions.map((f) => {
+                const types = {};
+                const child = convertFilter(f, types);
+                const typechecks = runtimeTypeChecks(types);
+                return typechecks === true ? child : ['case', typechecks, child, false];
+            });
+            return ['any', ...children];
+        }
+        case 'all': {
+            const [, ...conditions] = legacyFilter;
+            const children = conditions.map(f => convertFilter(f, expectedTypes));
+            return children.length > 1 ? ['all', ...children] : children[0];
+        }
+        case 'none': {
+            const [, ...conditions] = legacyFilter;
+            return ['!', convertFilter(['any', ...conditions], {})];
+        }
+        case 'in': {
+            const [, property, ...values] = legacyFilter;
+            return convertInOp(property, values);
+        }
+        case '!in': {
+            const [, property, ...values] = legacyFilter;
+            return convertInOp(property, values, true);
+        }
+        case 'has':
+            return convertHasOp(legacyFilter[1]);
+        case '!has':
+            return ['!', convertHasOp(legacyFilter[1])];
+        default:
+            return true;
+    }
+}
+// Given a set of feature properties and an expected type for each one,
+// construct an boolean expression that tests whether each property has the
+// right type.
+// E.g.: for {name: 'string', population: 'number'}, return
+// [ 'all',
+//   ['==', ['typeof', ['get', 'name'], 'string']],
+//   ['==', ['typeof', ['get', 'population'], 'number]]
+// ]
+function runtimeTypeChecks(expectedTypes) {
+    const conditions = [];
+    for (const property in expectedTypes) {
+        const get = property === '$id' ? ['id'] : ['get', property];
+        conditions.push(['==', ['typeof', get], expectedTypes[property]]);
+    }
+    if (conditions.length === 0)
+        return true;
+    if (conditions.length === 1)
+        return conditions[0];
+    return ['all', ...conditions];
+}
+function convertComparisonOp(property, value, op, expectedTypes) {
+    let get;
+    if (property === '$type') {
+        return [op, ['geometry-type'], value];
+    }
+    else if (property === '$id') {
+        get = ['id'];
+    }
+    else {
+        get = ['get', property];
+    }
+    if (expectedTypes && value !== null) {
+        const type = typeof value;
+        expectedTypes[property] = type;
+    }
+    if (op === '==' && property !== '$id' && value === null) {
+        return [
+            'all',
+            ['has', property],
+            ['==', get, null]
+        ];
+    }
+    else if (op === '!=' && property !== '$id' && value === null) {
+        return [
+            'any',
+            ['!', ['has', property]],
+            ['!=', get, null]
+        ];
+    }
+    return [op, get, value];
+}
+function convertInOp(property, values, negate = false) {
+    if (values.length === 0)
+        return negate;
+    let get;
+    if (property === '$type') {
+        get = ['geometry-type'];
+    }
+    else if (property === '$id') {
+        get = ['id'];
+    }
+    else {
+        get = ['get', property];
+    }
+    // Determine if the list of values to be searched is homogenously typed.
+    // If so (and if the type is string or number), then we can use a
+    // [match, input, [...values], true, false] construction rather than a
+    // bunch of `==` tests.
+    let uniformTypes = true;
+    const type = typeof values[0];
+    for (const value of values) {
+        if (typeof value !== type) {
+            uniformTypes = false;
+            break;
+        }
+    }
+    if (uniformTypes && (type === 'string' || type === 'number')) {
+        // Match expressions must have unique values.
+        const uniqueValues = values.sort().filter((v, i) => i === 0 || values[i - 1] !== v);
+        return ['match', get, uniqueValues, !negate, negate];
+    }
+    if (negate) {
+        return ['all', ...values.map(v => ['!=', get, v])];
+    }
+    else {
+        return ['any', ...values.map(v => ['==', get, v])];
+    }
+}
+function convertHasOp(property) {
+    if (property === '$type') {
+        return true;
+    }
+    else if (property === '$id') {
+        return ['!=', ['id'], null];
+    }
+    else {
+        return ['has', property];
+    }
+}
+
+function convertLiteral(value) {
+    return typeof value === 'object' ? ['literal', value] : value;
+}
+function convertFunction(parameters, propertySpec) {
+    let stops = parameters.stops;
+    if (!stops) {
+        // identity function
+        return convertIdentityFunction(parameters, propertySpec);
+    }
+    const zoomAndFeatureDependent = stops && typeof stops[0][0] === 'object';
+    const featureDependent = zoomAndFeatureDependent || parameters.property !== undefined;
+    const zoomDependent = zoomAndFeatureDependent || !featureDependent;
+    stops = stops.map((stop) => {
+        if (!featureDependent && propertySpec.tokens && typeof stop[1] === 'string') {
+            return [stop[0], convertTokenString(stop[1])];
+        }
+        return [stop[0], convertLiteral(stop[1])];
+    });
+    if (zoomAndFeatureDependent) {
+        return convertZoomAndPropertyFunction(parameters, propertySpec, stops);
+    }
+    else if (zoomDependent) {
+        return convertZoomFunction(parameters, propertySpec, stops);
+    }
+    else {
+        return convertPropertyFunction(parameters, propertySpec, stops);
+    }
+}
+function convertIdentityFunction(parameters, propertySpec) {
+    const get = ['get', parameters.property];
+    if (parameters.default === undefined) {
+        // By default, expressions for string-valued properties get coerced. To preserve
+        // legacy function semantics, insert an explicit assertion instead.
+        return propertySpec.type === 'string' ? ['string', get] : get;
+    }
+    else if (propertySpec.type === 'enum') {
+        return [
+            'match',
+            get,
+            Object.keys(propertySpec.values),
+            get,
+            parameters.default
+        ];
+    }
+    else {
+        const expression = [propertySpec.type === 'color' ? 'to-color' : propertySpec.type, get, convertLiteral(parameters.default)];
+        if (propertySpec.type === 'array') {
+            expression.splice(1, 0, propertySpec.value, propertySpec.length || null);
+        }
+        return expression;
+    }
+}
+function getInterpolateOperator(parameters) {
+    switch (parameters.colorSpace) {
+        case 'hcl': return 'interpolate-hcl';
+        case 'lab': return 'interpolate-lab';
+        default: return 'interpolate';
+    }
+}
+function convertZoomAndPropertyFunction(parameters, propertySpec, stops) {
+    const featureFunctionParameters = {};
+    const featureFunctionStops = {};
+    const zoomStops = [];
+    for (let s = 0; s < stops.length; s++) {
+        const stop = stops[s];
+        const zoom = stop[0].zoom;
+        if (featureFunctionParameters[zoom] === undefined) {
+            featureFunctionParameters[zoom] = {
+                zoom,
+                type: parameters.type,
+                property: parameters.property,
+                default: parameters.default,
+            };
+            featureFunctionStops[zoom] = [];
+            zoomStops.push(zoom);
+        }
+        featureFunctionStops[zoom].push([stop[0].value, stop[1]]);
+    }
+    // the interpolation type for the zoom dimension of a zoom-and-property
+    // function is determined directly from the style property specification
+    // for which it's being used: linear for interpolatable properties, step
+    // otherwise.
+    const functionType = getFunctionType({}, propertySpec);
+    if (functionType === 'exponential') {
+        const expression = [getInterpolateOperator(parameters), ['linear'], ['zoom']];
+        for (const z of zoomStops) {
+            const output = convertPropertyFunction(featureFunctionParameters[z], propertySpec, featureFunctionStops[z]);
+            appendStopPair(expression, z, output, false);
+        }
+        return expression;
+    }
+    else {
+        const expression = ['step', ['zoom']];
+        for (const z of zoomStops) {
+            const output = convertPropertyFunction(featureFunctionParameters[z], propertySpec, featureFunctionStops[z]);
+            appendStopPair(expression, z, output, true);
+        }
+        fixupDegenerateStepCurve(expression);
+        return expression;
+    }
+}
+function coalesce(a, b) {
+    if (a !== undefined)
+        return a;
+    if (b !== undefined)
+        return b;
+}
+function getFallback(parameters, propertySpec) {
+    const defaultValue = convertLiteral(coalesce(parameters.default, propertySpec.default));
+    /*
+     * Some fields with type: resolvedImage have an undefined default.
+     * Because undefined is an invalid value for resolvedImage, set fallback to
+     * an empty string instead of undefined to ensure output
+     * passes validation.
+     */
+    if (defaultValue === undefined && propertySpec.type === 'resolvedImage') {
+        return '';
+    }
+    return defaultValue;
+}
+function convertPropertyFunction(parameters, propertySpec, stops) {
+    const type = getFunctionType(parameters, propertySpec);
+    const get = ['get', parameters.property];
+    if (type === 'categorical' && typeof stops[0][0] === 'boolean') {
+        const expression = ['case'];
+        for (const stop of stops) {
+            expression.push(['==', get, stop[0]], stop[1]);
+        }
+        expression.push(getFallback(parameters, propertySpec));
+        return expression;
+    }
+    else if (type === 'categorical') {
+        const expression = ['match', get];
+        for (const stop of stops) {
+            appendStopPair(expression, stop[0], stop[1], false);
+        }
+        expression.push(getFallback(parameters, propertySpec));
+        return expression;
+    }
+    else if (type === 'interval') {
+        const expression = ['step', ['number', get]];
+        for (const stop of stops) {
+            appendStopPair(expression, stop[0], stop[1], true);
+        }
+        fixupDegenerateStepCurve(expression);
+        return parameters.default === undefined ? expression : [
+            'case',
+            ['==', ['typeof', get], 'number'],
+            expression,
+            convertLiteral(parameters.default)
+        ];
+    }
+    else if (type === 'exponential') {
+        const base = parameters.base !== undefined ? parameters.base : 1;
+        const expression = [
+            getInterpolateOperator(parameters),
+            base === 1 ? ['linear'] : ['exponential', base],
+            ['number', get]
+        ];
+        for (const stop of stops) {
+            appendStopPair(expression, stop[0], stop[1], false);
+        }
+        return parameters.default === undefined ? expression : [
+            'case',
+            ['==', ['typeof', get], 'number'],
+            expression,
+            convertLiteral(parameters.default)
+        ];
+    }
+    else {
+        throw new Error(`Unknown property function type ${type}`);
+    }
+}
+function convertZoomFunction(parameters, propertySpec, stops, input = ['zoom']) {
+    const type = getFunctionType(parameters, propertySpec);
+    let expression;
+    let isStep = false;
+    if (type === 'interval') {
+        expression = ['step', input];
+        isStep = true;
+    }
+    else if (type === 'exponential') {
+        const base = parameters.base !== undefined ? parameters.base : 1;
+        expression = [getInterpolateOperator(parameters), base === 1 ? ['linear'] : ['exponential', base], input];
+    }
+    else {
+        throw new Error(`Unknown zoom function type "${type}"`);
+    }
+    for (const stop of stops) {
+        appendStopPair(expression, stop[0], stop[1], isStep);
+    }
+    fixupDegenerateStepCurve(expression);
+    return expression;
+}
+function fixupDegenerateStepCurve(expression) {
+    // degenerate step curve (i.e. a constant function): add a noop stop
+    if (expression[0] === 'step' && expression.length === 3) {
+        expression.push(0);
+        expression.push(expression[3]);
+    }
+}
+function appendStopPair(curve, input, output, isStep) {
+    // Skip duplicate stop values. They were not validated for functions, but they are for expressions.
+    // https://github.com/mapbox/mapbox-gl-js/issues/4107
+    if (curve.length > 3 && input === curve[curve.length - 2]) {
+        return;
+    }
+    // step curves don't get the first input value, as it is redundant.
+    if (!(isStep && curve.length === 2)) {
+        curve.push(input);
+    }
+    curve.push(output);
+}
+function getFunctionType(parameters, propertySpec) {
+    if (parameters.type) {
+        return parameters.type;
+    }
+    else {
+        return propertySpec.expression.interpolated ? 'exponential' : 'interval';
+    }
+}
+// "String with {name} token" => ["concat", "String with ", ["get", "name"], " token"]
+function convertTokenString(s) {
+    const result = ['concat'];
+    const re = /{([^{}]+)}/g;
+    let pos = 0;
+    for (let match = re.exec(s); match !== null; match = re.exec(s)) {
+        const literal = s.slice(pos, re.lastIndex - match[0].length);
+        pos = re.lastIndex;
+        if (literal.length > 0)
+            result.push(literal);
+        result.push(['get', match[1]]);
+    }
+    if (result.length === 1) {
+        return s;
+    }
+    if (pos < s.length) {
+        result.push(s.slice(pos));
+    }
+    else if (result.length === 2) {
+        return ['to-string', result[1]];
+    }
+    return result;
+}
+
+function getPropertyReference(propertyName) {
+    for (let i = 0; i < v8Spec.layout.length; i++) {
+        for (const key in v8Spec[v8Spec.layout[i]]) {
+            if (key === propertyName)
+                return v8Spec[v8Spec.layout[i]][key];
+        }
+    }
+    for (let i = 0; i < v8Spec.paint.length; i++) {
+        for (const key in v8Spec[v8Spec.paint[i]]) {
+            if (key === propertyName)
+                return v8Spec[v8Spec.paint[i]][key];
+        }
+    }
+    return null;
+}
+function eachSource(style, callback) {
+    for (const k in style.sources) {
+        callback(style.sources[k]);
+    }
+}
+function eachLayer(style, callback) {
+    for (const layer of style.layers) {
+        callback(layer);
+    }
+}
+function eachProperty(style, options, callback) {
+    function inner(layer, propertyType) {
+        const properties = layer[propertyType];
+        if (!properties)
+            return;
+        Object.keys(properties).forEach((key) => {
+            callback({
+                path: [layer.id, propertyType, key],
+                key,
+                value: properties[key],
+                reference: getPropertyReference(key),
+                set(x) {
+                    properties[key] = x;
+                }
+            });
+        });
+    }
+    eachLayer(style, (layer) => {
+        if (options.paint) {
+            inner(layer, 'paint');
+        }
+        if (options.layout) {
+            inner(layer, 'layout');
+        }
+    });
+}
+
+function stringify(obj) {
+    const type = typeof obj;
+    if (type === 'number' || type === 'boolean' || type === 'string' || obj === undefined || obj === null)
+        return JSON.stringify(obj);
+    if (Array.isArray(obj)) {
+        let str = '[';
+        for (const val of obj) {
+            str += `${stringify(val)},`;
+        }
+        return `${str}]`;
+    }
+    const keys = Object.keys(obj).sort();
+    let str = '{';
+    for (let i = 0; i < keys.length; i++) {
+        str += `${JSON.stringify(keys[i])}:${stringify(obj[keys[i]])},`;
+    }
+    return `${str}}`;
+}
+function getKey(layer) {
+    let key = '';
+    for (const k of refProperties) {
+        key += `/${stringify(layer[k])}`;
+    }
+    return key;
+}
+/**
+ * Given an array of layers, return an array of arrays of layers where all
+ * layers in each group have identical layout-affecting properties. These
+ * are the properties that were formerly used by explicit `ref` mechanism
+ * for layers: 'type', 'source', 'source-layer', 'minzoom', 'maxzoom',
+ * 'filter', and 'layout'.
+ *
+ * The input is not modified. The output layers are references to the
+ * input layers.
+ *
+ * @private
+ * @param {Array<Layer>} layers
+ * @param {Object} [cachedKeys] - an object to keep already calculated keys.
+ * @returns {Array<Array<Layer>>}
+ */
+function groupByLayout(layers, cachedKeys) {
+    const groups = {};
+    for (let i = 0; i < layers.length; i++) {
+        const k = (cachedKeys && cachedKeys[layers[i].id]) || getKey(layers[i]);
+        // update the cache if there is one
+        if (cachedKeys)
+            cachedKeys[layers[i].id] = k;
+        let group = groups[k];
+        if (!group) {
+            group = groups[k] = [];
+        }
+        group.push(layers[i]);
+    }
+    const result = [];
+    for (const k in groups) {
+        result.push(groups[k]);
+    }
+    return result;
+}
+
+function emptyStyle() {
+    const style = {};
+    const version = v8Spec['$version'];
+    for (const styleKey in v8Spec['$root']) {
+        const spec = v8Spec['$root'][styleKey];
+        if (spec.required) {
+            let value = null;
+            if (styleKey === 'version') {
+                value = version;
+            }
+            else {
+                if (spec.type === 'array') {
+                    value = [];
+                }
+                else {
+                    value = {};
+                }
+            }
+            if (value != null) {
+                style[styleKey] = value;
+            }
+        }
+    }
+    return style;
+}
+
+function validateConstants(options) {
+    const key = options.key;
+    const constants = options.value;
+    if (constants) {
+        return [new ValidationError(key, constants, 'constants have been deprecated as of v8')];
+    }
+    else {
+        return [];
+    }
+}
+
+// Turn jsonlint-lines-primitives objects into primitive objects
+function unbundle(value) {
+    if (value instanceof Number || value instanceof String || value instanceof Boolean) {
+        return value.valueOf();
+    }
+    else {
+        return value;
+    }
+}
+function deepUnbundle(value) {
+    if (Array.isArray(value)) {
+        return value.map(deepUnbundle);
+    }
+    else if (value instanceof Object && !(value instanceof Number || value instanceof String || value instanceof Boolean)) {
+        const unbundledValue = {};
+        for (const key in value) {
+            unbundledValue[key] = deepUnbundle(value[key]);
+        }
+        return unbundledValue;
+    }
+    return unbundle(value);
 }
 
 function validateObject(options) {
@@ -8684,7 +10268,7 @@ function validateColor(options) {
     if (type !== 'string') {
         return [new ValidationError(key, value, `color expected, ${type} found`)];
     }
-    if (parseCSSColor_1(value) === null) {
+    if (!Color.parse(String(value))) { // cast String object to string primitive
         return [new ValidationError(key, value, `color expected, "${value}" found`)];
     }
     return [];
@@ -8706,160 +10290,6 @@ function validateEnum(options) {
         }
     }
     return errors;
-}
-
-function isExpressionFilter(filter) {
-    if (filter === true || filter === false) {
-        return true;
-    }
-    if (!Array.isArray(filter) || filter.length === 0) {
-        return false;
-    }
-    switch (filter[0]) {
-        case 'has':
-            return filter.length >= 2 && filter[1] !== '$id' && filter[1] !== '$type';
-        case 'in':
-            return filter.length >= 3 && (typeof filter[1] !== 'string' || Array.isArray(filter[2]));
-        case '!in':
-        case '!has':
-        case 'none':
-            return false;
-        case '==':
-        case '!=':
-        case '>':
-        case '>=':
-        case '<':
-        case '<=':
-            return filter.length !== 3 || (Array.isArray(filter[1]) || Array.isArray(filter[2]));
-        case 'any':
-        case 'all':
-            for (const f of filter.slice(1)) {
-                if (!isExpressionFilter(f) && typeof f !== 'boolean') {
-                    return false;
-                }
-            }
-            return true;
-        default:
-            return true;
-    }
-}
-const filterSpec = {
-    'type': 'boolean',
-    'default': false,
-    'transition': false,
-    'property-type': 'data-driven',
-    'expression': {
-        'interpolated': false,
-        'parameters': ['zoom', 'feature']
-    }
-};
-/**
- * Given a filter expressed as nested arrays, return a new function
- * that evaluates whether a given feature (with a .properties or .tags property)
- * passes its test.
- *
- * @private
- * @param {Array} filter maplibre gl filter
- * @returns {Function} filter-evaluating function
- */
-function createFilter(filter) {
-    if (filter === null || filter === undefined) {
-        return { filter: () => true, needGeometry: false };
-    }
-    if (!isExpressionFilter(filter)) {
-        filter = convertFilter(filter);
-    }
-    const compiled = createExpression(filter, filterSpec);
-    if (compiled.result === 'error') {
-        throw new Error(compiled.value.map(err => `${err.key}: ${err.message}`).join(', '));
-    }
-    else {
-        const needGeometry = geometryNeeded(filter);
-        return { filter: (globalProperties, feature, canonical) => compiled.value.evaluate(globalProperties, feature, {}, canonical),
-            needGeometry };
-    }
-}
-// Comparison function to sort numbers and strings
-function compare(a, b) {
-    return a < b ? -1 : a > b ? 1 : 0;
-}
-function geometryNeeded(filter) {
-    if (!Array.isArray(filter))
-        return false;
-    if (filter[0] === 'within')
-        return true;
-    for (let index = 1; index < filter.length; index++) {
-        if (geometryNeeded(filter[index]))
-            return true;
-    }
-    return false;
-}
-function convertFilter(filter) {
-    if (!filter)
-        return true;
-    const op = filter[0];
-    if (filter.length <= 1)
-        return (op !== 'any');
-    const converted = op === '==' ? convertComparisonOp(filter[1], filter[2], '==') :
-        op === '!=' ? convertNegation(convertComparisonOp(filter[1], filter[2], '==')) :
-            op === '<' ||
-                op === '>' ||
-                op === '<=' ||
-                op === '>=' ? convertComparisonOp(filter[1], filter[2], op) :
-                op === 'any' ? convertDisjunctionOp(filter.slice(1)) :
-                    op === 'all' ? ['all'].concat(filter.slice(1).map(convertFilter)) :
-                        op === 'none' ? ['all'].concat(filter.slice(1).map(convertFilter).map(convertNegation)) :
-                            op === 'in' ? convertInOp(filter[1], filter.slice(2)) :
-                                op === '!in' ? convertNegation(convertInOp(filter[1], filter.slice(2))) :
-                                    op === 'has' ? convertHasOp(filter[1]) :
-                                        op === '!has' ? convertNegation(convertHasOp(filter[1])) :
-                                            op === 'within' ? filter :
-                                                true;
-    return converted;
-}
-function convertComparisonOp(property, value, op) {
-    switch (property) {
-        case '$type':
-            return [`filter-type-${op}`, value];
-        case '$id':
-            return [`filter-id-${op}`, value];
-        default:
-            return [`filter-${op}`, property, value];
-    }
-}
-function convertDisjunctionOp(filters) {
-    return ['any'].concat(filters.map(convertFilter));
-}
-function convertInOp(property, values) {
-    if (values.length === 0) {
-        return false;
-    }
-    switch (property) {
-        case '$type':
-            return ['filter-type-in', ['literal', values]];
-        case '$id':
-            return ['filter-id-in', ['literal', values]];
-        default:
-            if (values.length > 200 && !values.some(v => typeof v !== typeof values[0])) {
-                return ['filter-in-large', property, ['literal', values.sort(compare)]];
-            }
-            else {
-                return ['filter-in-small', property, ['literal', values]];
-            }
-    }
-}
-function convertHasOp(property) {
-    switch (property) {
-        case '$type':
-            return true;
-        case '$id':
-            return ['filter-has-id'];
-        default:
-            return ['filter-has', property];
-    }
-}
-function convertNegation(filter) {
-    return ['!', filter];
 }
 
 function validateFilter$1(options) {
@@ -9510,7 +10940,7 @@ function validateGlyphsUrl(options) {
  *   var validate = require('maplibre-gl-style-spec/lib/validate_style.min');
  *   var errors = validate(style);
  */
-function validateStyleMin(style, styleSpec = spec) {
+function validateStyleMin(style, styleSpec = v8Spec) {
     let errors = [];
     errors = errors.concat(validate({
         key: '',
@@ -9564,6 +10994,25 @@ function wrapCleanErrors(inner) {
         return sortErrors(inner.apply(this, args));
     };
 }
+
+const v8 = v8Spec;
+const expression = {
+    StyleExpression,
+    StylePropertyFunction,
+    ZoomConstantExpression,
+    ZoomDependentExpression,
+    createExpression,
+    createPropertyExpression,
+    isExpression,
+    isExpressionFilter,
+    normalizePropertyExpression,
+};
+const styleFunction = {
+    convertFunction,
+    createFunction,
+    isFunction
+};
+const visit = { eachLayer, eachProperty, eachSource };
 
 const validateStyle = validateStyleMin;
 const validateSource = validateStyle.source;
@@ -10693,6 +12142,7 @@ const registerForPluginStateChange = function (callback) {
 const clearRTLTextPlugin = function () {
     pluginStatus = status.unavailable;
     pluginURL = null;
+    _completionCallback = null;
 };
 const setRTLTextPlugin = function (url, callback, deferred = false) {
     if (pluginStatus === status.deferred || pluginStatus === status.loading || pluginStatus === status.loaded) {
@@ -11098,9 +12548,10 @@ class DataConstantProperty {
         return value.expression.evaluate(parameters);
     }
     interpolate(a, b, t) {
-        const interp = interpolate[this.specification.type];
-        if (interp) {
-            return interp(a, b, t);
+        const interpolationType = this.specification.type;
+        const interpolationFn = interpolate[interpolationType];
+        if (interpolationFn) {
+            return interpolationFn(a, b, t);
         }
         else {
             return a;
@@ -11142,9 +12593,11 @@ class DataDrivenProperty {
         if (a.value.value === undefined || b.value.value === undefined) {
             return new PossiblyEvaluatedPropertyValue(this, { kind: 'constant', value: undefined }, a.parameters);
         }
-        const interp = interpolate[this.specification.type];
-        if (interp) {
-            return new PossiblyEvaluatedPropertyValue(this, { kind: 'constant', value: interp(a.value.value, b.value.value, t) }, a.parameters);
+        const interpolationType = this.specification.type;
+        const interpolationFn = interpolate[interpolationType];
+        if (interpolationFn) {
+            const interpolatedValue = interpolationFn(a.value.value, b.value.value, t);
+            return new PossiblyEvaluatedPropertyValue(this, { kind: 'constant', value: interpolatedValue }, a.parameters);
         }
         else {
             return a;
@@ -11445,7 +12898,7 @@ class StyleLayer extends Evented {
             layerType: this.type,
             objectKey: name,
             value,
-            styleSpec: spec,
+            styleSpec: v8Spec,
             // Workaround for https://github.com/mapbox/mapbox-gl-js/issues/2407
             style: { glyphs: true, sprite: true }
         }));
@@ -11514,7 +12967,7 @@ const RESIZE_MULTIPLIER = 5;
  * associated struct type. Each particular struct type, together with an
  * alignment size, determines the memory layout of a StructArray whose elements
  * are of that type.  Thus, for each such layout that we need, we have
- * a corrseponding StructArrayLayout class, inheriting from StructArray and
+ * a corresponding StructArrayLayout class, inheriting from StructArray and
  * implementing `emplaceBack()` and `_refreshViews()`.
  *
  * In some cases, where we need to access particular elements of a StructArray,
@@ -12334,7 +13787,7 @@ class CollisionBoxStruct extends Struct {
     get featureIndex() { return this._structArray.uint32[this._pos4 + 3]; }
     get sourceLayerIndex() { return this._structArray.uint16[this._pos2 + 8]; }
     get bucketIndex() { return this._structArray.uint16[this._pos2 + 9]; }
-    get anchorPoint() { return new pointGeometry(this.anchorPointX, this.anchorPointY); }
+    get anchorPoint() { return new Point$2(this.anchorPointX, this.anchorPointY); }
 }
 CollisionBoxStruct.prototype.size = 20;
 /**
@@ -12576,8 +14029,8 @@ register('SegmentVector', SegmentVector);
  */
 function packUint8ToFloat(a, b) {
     // coerce a and b to 8-bit ints
-    a = clamp(Math.floor(a), 0, 255);
-    b = clamp(Math.floor(b), 0, 255);
+    a = clamp$1(Math.floor(a), 0, 255);
+    b = clamp$1(Math.floor(b), 0, 255);
     return 256 * a + b;
 }
 
@@ -12589,17 +14042,9 @@ const patternAttributes = createLayout([
     { name: 'a_pixel_ratio_to', components: 1, type: 'Uint16' },
 ]);
 
-var murmurhashJsExports = {};
-var murmurhashJs = {
-  get exports(){ return murmurhashJsExports; },
-  set exports(v){ murmurhashJsExports = v; },
-};
+var murmurhashJs$1 = {exports: {}};
 
-var murmurhash3_gcExports = {};
-var murmurhash3_gc$1 = {
-  get exports(){ return murmurhash3_gcExports; },
-  set exports(v){ murmurhash3_gcExports = v; },
-};
+var murmurhash3_gc$2 = {exports: {}};
 
 /**
  * JS Implementation of MurmurHash3 (r136) (as of May 20, 2011)
@@ -12613,6 +14058,7 @@ var murmurhash3_gc$1 = {
  * @param {number} seed Positive integer only
  * @return {number} 32-bit positive integer hash 
  */
+var murmurhash3_gc = murmurhash3_gc$2.exports;
 
 (function (module) {
 	function murmurhash3_32_gc(key, seed) {
@@ -12669,16 +14115,13 @@ var murmurhash3_gc$1 = {
 
 	if('object' !== "undefined") {
 	  module.exports = murmurhash3_32_gc;
-	}
-} (murmurhash3_gc$1));
+	} 
+} (murmurhash3_gc$2));
 
-var murmurhash3_gc = murmurhash3_gcExports;
+var murmurhash3_gcExports = murmurhash3_gc$2.exports;
+var murmurhash3_gc$1 = /*@__PURE__*/getDefaultExportFromCjs(murmurhash3_gcExports);
 
-var murmurhash2_gcExports = {};
-var murmurhash2_gc$1 = {
-  get exports(){ return murmurhash2_gcExports; },
-  set exports(v){ murmurhash2_gcExports = v; },
-};
+var murmurhash2_gc$2 = {exports: {}};
 
 /**
  * JS Implementation of MurmurHash2
@@ -12692,6 +14135,7 @@ var murmurhash2_gc$1 = {
  * @param {number} seed Positive integer only
  * @return {number} 32-bit positive integer hash
  */
+var murmurhash2_gc = murmurhash2_gc$2.exports;
 
 (function (module) {
 	function murmurhash2_32_gc(str, seed) {
@@ -12734,17 +14178,23 @@ var murmurhash2_gc$1 = {
 
 	if('object' !== undefined) {
 	  module.exports = murmurhash2_32_gc;
-	}
-} (murmurhash2_gc$1));
+	} 
+} (murmurhash2_gc$2));
 
-var murmurhash2_gc = murmurhash2_gcExports;
+var murmurhash2_gcExports = murmurhash2_gc$2.exports;
+var murmurhash2_gc$1 = /*@__PURE__*/getDefaultExportFromCjs(murmurhash2_gcExports);
+
+var murmurhashJs = murmurhashJs$1.exports;
 
 var murmur3 = murmurhash3_gcExports;
 var murmur2 = murmurhash2_gcExports;
 
-murmurhashJs.exports = murmur3;
-var murmur3_1 = murmurhashJsExports.murmur3 = murmur3;
-var murmur2_1 = murmurhashJsExports.murmur2 = murmur2;
+murmurhashJs$1.exports = murmur3;
+var murmur3_1 = murmurhashJs$1.exports.murmur3 = murmur3;
+var murmur2_1 = murmurhashJs$1.exports.murmur2 = murmur2;
+
+var murmurhashJsExports = murmurhashJs$1.exports;
+var murmur3$1 = /*@__PURE__*/getDefaultExportFromCjs(murmurhashJsExports);
 
 // A transferable data structure that maps feature ids to their indices and buffer offsets
 class FeaturePositionMap {
@@ -12808,7 +14258,7 @@ function getNumericId(value) {
     if (!isNaN(numValue) && numValue <= Number.MAX_SAFE_INTEGER) {
         return numValue;
     }
-    return murmurhashJsExports(String(value));
+    return murmur3$1(String(value));
 }
 // custom quicksort that sorts ids, indices and offsets together (by ids)
 // uses Hoare partitioning & manual tail call optimization to avoid worst case scenarios
@@ -13115,7 +14565,7 @@ class CompositeExpressionBinder {
     }
     setUniform(uniform, globals) {
         const currentZoom = this.useIntegerZoom ? Math.floor(globals.zoom) : globals.zoom;
-        const factor = clamp(this.expression.interpolationFactor(currentZoom, this.zoom, this.zoom + 1), 0, 1);
+        const factor = clamp$1(this.expression.interpolationFactor(currentZoom, this.zoom, this.zoom + 1), 0, 1);
         uniform.set(factor);
     }
     getBinding(context, location, _) {
@@ -13482,7 +14932,7 @@ var EXTENT = 8192;
 
 // These bounds define the minimum and maximum supported coordinate values.
 // While visible coordinates are within [0, EXTENT], tiles may theoretically
-// contain cordinates within [-Infinity, Infinity]. Our range is limited by the
+// contain coordinates within [-Infinity, Infinity]. Our range is limited by the
 // number of bits used to represent the coordinate.
 const BITS = 15;
 const MAX = Math.pow(2, BITS - 1) - 1;
@@ -13504,8 +14954,8 @@ function loadGeometry(feature) {
             // points and we need to do the same to avoid renering differences.
             const x = Math.round(point.x * scale);
             const y = Math.round(point.y * scale);
-            point.x = clamp(x, MIN, MAX);
-            point.y = clamp(y, MIN, MAX);
+            point.x = clamp$1(x, MIN, MAX);
+            point.y = clamp$1(y, MIN, MAX);
             if (x < point.x || x > point.x + 1 || y < point.y || y > point.y + 1) {
                 // warn when exceeding allowed extent except for the 1-px-off case
                 // https://github.com/mapbox/mapbox-gl-js/issues/8992
@@ -13804,10 +15254,10 @@ function polygonIntersectsBox(ring, boxX1, boxY1, boxX2, boxY2) {
             return true;
     }
     const corners = [
-        new pointGeometry(boxX1, boxY1),
-        new pointGeometry(boxX1, boxY2),
-        new pointGeometry(boxX2, boxY2),
-        new pointGeometry(boxX2, boxY1)
+        new Point$2(boxX1, boxY1),
+        new Point$2(boxX1, boxY2),
+        new Point$2(boxX2, boxY2),
+        new Point$2(boxX2, boxY1)
     ];
     if (ring.length > 2) {
         for (const corner of corners) {
@@ -13855,7 +15305,7 @@ function translate$4(queryGeometry, translate, translateAnchor, bearing, pixelsT
     if (!translate[0] && !translate[1]) {
         return queryGeometry;
     }
-    const pt = pointGeometry.convert(translate)._mult(pixelsToTileUnits);
+    const pt = Point$2.convert(translate)._mult(pixelsToTileUnits);
     if (translateAnchor === 'viewport') {
         pt._rotate(-bearing);
     }
@@ -13875,8 +15325,8 @@ function offsetLine(rings, offset) {
             const a = ring[index - 1];
             const b = ring[index];
             const c = ring[index + 1];
-            const aToB = index === 0 ? new pointGeometry(0, 0) : b.sub(a)._unit()._perp();
-            const bToC = index === ring.length - 1 ? new pointGeometry(0, 0) : c.sub(b)._unit()._perp();
+            const aToB = index === 0 ? new Point$2(0, 0) : b.sub(a)._unit()._perp();
+            const bToC = index === ring.length - 1 ? new Point$2(0, 0) : c.sub(b)._unit()._perp();
             const extrude = aToB._add(bToC)._unit();
             const cosHalfAngle = extrude.x * bToC.x + extrude.y * bToC.y;
             if (cosHalfAngle !== 0) {
@@ -13891,20 +15341,20 @@ function offsetLine(rings, offset) {
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
 const layout$5 = new Properties({
-    "circle-sort-key": new DataDrivenProperty(spec["layout_circle"]["circle-sort-key"]),
+    "circle-sort-key": new DataDrivenProperty(v8Spec["layout_circle"]["circle-sort-key"]),
 });
 const paint$8 = new Properties({
-    "circle-radius": new DataDrivenProperty(spec["paint_circle"]["circle-radius"]),
-    "circle-color": new DataDrivenProperty(spec["paint_circle"]["circle-color"]),
-    "circle-blur": new DataDrivenProperty(spec["paint_circle"]["circle-blur"]),
-    "circle-opacity": new DataDrivenProperty(spec["paint_circle"]["circle-opacity"]),
-    "circle-translate": new DataConstantProperty(spec["paint_circle"]["circle-translate"]),
-    "circle-translate-anchor": new DataConstantProperty(spec["paint_circle"]["circle-translate-anchor"]),
-    "circle-pitch-scale": new DataConstantProperty(spec["paint_circle"]["circle-pitch-scale"]),
-    "circle-pitch-alignment": new DataConstantProperty(spec["paint_circle"]["circle-pitch-alignment"]),
-    "circle-stroke-width": new DataDrivenProperty(spec["paint_circle"]["circle-stroke-width"]),
-    "circle-stroke-color": new DataDrivenProperty(spec["paint_circle"]["circle-stroke-color"]),
-    "circle-stroke-opacity": new DataDrivenProperty(spec["paint_circle"]["circle-stroke-opacity"]),
+    "circle-radius": new DataDrivenProperty(v8Spec["paint_circle"]["circle-radius"]),
+    "circle-color": new DataDrivenProperty(v8Spec["paint_circle"]["circle-color"]),
+    "circle-blur": new DataDrivenProperty(v8Spec["paint_circle"]["circle-blur"]),
+    "circle-opacity": new DataDrivenProperty(v8Spec["paint_circle"]["circle-opacity"]),
+    "circle-translate": new DataConstantProperty(v8Spec["paint_circle"]["circle-translate"]),
+    "circle-translate-anchor": new DataConstantProperty(v8Spec["paint_circle"]["circle-translate-anchor"]),
+    "circle-pitch-scale": new DataConstantProperty(v8Spec["paint_circle"]["circle-pitch-scale"]),
+    "circle-pitch-alignment": new DataConstantProperty(v8Spec["paint_circle"]["circle-pitch-alignment"]),
+    "circle-stroke-width": new DataDrivenProperty(v8Spec["paint_circle"]["circle-stroke-width"]),
+    "circle-stroke-color": new DataDrivenProperty(v8Spec["paint_circle"]["circle-stroke-color"]),
+    "circle-stroke-opacity": new DataDrivenProperty(v8Spec["paint_circle"]["circle-stroke-opacity"]),
 });
 var properties$8 = { paint: paint$8, layout: layout$5 };
 
@@ -21616,7 +23066,7 @@ class CircleStyleLayer extends StyleLayer {
 }
 function projectPoint(p, pixelPosMatrix) {
     const point = transformMat4$1([], [p.x, p.y, 0, 1], pixelPosMatrix);
-    return new pointGeometry(point[0] / point[3], point[1] / point[3]);
+    return new Point$2(point[0] / point[3], point[1] / point[3]);
 }
 function projectQueryGeometry$1(queryGeometry, pixelPosMatrix) {
     return queryGeometry.map((p) => {
@@ -21630,11 +23080,11 @@ register('HeatmapBucket', HeatmapBucket, { omit: ['layers'] });
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
 const paint$7 = new Properties({
-    "heatmap-radius": new DataDrivenProperty(spec["paint_heatmap"]["heatmap-radius"]),
-    "heatmap-weight": new DataDrivenProperty(spec["paint_heatmap"]["heatmap-weight"]),
-    "heatmap-intensity": new DataConstantProperty(spec["paint_heatmap"]["heatmap-intensity"]),
-    "heatmap-color": new ColorRampProperty(spec["paint_heatmap"]["heatmap-color"]),
-    "heatmap-opacity": new DataConstantProperty(spec["paint_heatmap"]["heatmap-opacity"]),
+    "heatmap-radius": new DataDrivenProperty(v8Spec["paint_heatmap"]["heatmap-radius"]),
+    "heatmap-weight": new DataDrivenProperty(v8Spec["paint_heatmap"]["heatmap-weight"]),
+    "heatmap-intensity": new DataConstantProperty(v8Spec["paint_heatmap"]["heatmap-intensity"]),
+    "heatmap-color": new ColorRampProperty(v8Spec["paint_heatmap"]["heatmap-color"]),
+    "heatmap-opacity": new DataConstantProperty(v8Spec["paint_heatmap"]["heatmap-opacity"]),
 });
 var properties$7 = { paint: paint$7 };
 
@@ -21824,12 +23274,12 @@ class HeatmapStyleLayer extends StyleLayer {
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
 const paint$6 = new Properties({
-    "hillshade-illumination-direction": new DataConstantProperty(spec["paint_hillshade"]["hillshade-illumination-direction"]),
-    "hillshade-illumination-anchor": new DataConstantProperty(spec["paint_hillshade"]["hillshade-illumination-anchor"]),
-    "hillshade-exaggeration": new DataConstantProperty(spec["paint_hillshade"]["hillshade-exaggeration"]),
-    "hillshade-shadow-color": new DataConstantProperty(spec["paint_hillshade"]["hillshade-shadow-color"]),
-    "hillshade-highlight-color": new DataConstantProperty(spec["paint_hillshade"]["hillshade-highlight-color"]),
-    "hillshade-accent-color": new DataConstantProperty(spec["paint_hillshade"]["hillshade-accent-color"]),
+    "hillshade-illumination-direction": new DataConstantProperty(v8Spec["paint_hillshade"]["hillshade-illumination-direction"]),
+    "hillshade-illumination-anchor": new DataConstantProperty(v8Spec["paint_hillshade"]["hillshade-illumination-anchor"]),
+    "hillshade-exaggeration": new DataConstantProperty(v8Spec["paint_hillshade"]["hillshade-exaggeration"]),
+    "hillshade-shadow-color": new DataConstantProperty(v8Spec["paint_hillshade"]["hillshade-shadow-color"]),
+    "hillshade-highlight-color": new DataConstantProperty(v8Spec["paint_hillshade"]["hillshade-highlight-color"]),
+    "hillshade-accent-color": new DataConstantProperty(v8Spec["paint_hillshade"]["hillshade-accent-color"]),
 });
 var properties$6 = { paint: paint$6 };
 
@@ -21847,16 +23297,14 @@ const layout$4 = createLayout([
 ], 4);
 const { members: members$3, size: size$3, alignment: alignment$3 } = layout$4;
 
-var earcutExports = {};
-var earcut$1 = {
-  get exports(){ return earcutExports; },
-  set exports(v){ earcutExports = v; },
-};
+var earcut$2 = {exports: {}};
+
+var earcut_1 = earcut$2.exports;
 
 'use strict';
 
-earcut$1.exports = earcut;
-var _default = earcutExports.default = earcut;
+earcut$2.exports = earcut;
+var _default = earcut$2.exports.default = earcut;
 
 function earcut(data, holeIndices, dim) {
 
@@ -22535,6 +23983,9 @@ earcut.flatten = function (data) {
     return result;
 };
 
+var earcutExports = earcut$2.exports;
+var earcut$1 = /*@__PURE__*/getDefaultExportFromCjs(earcutExports);
+
 function quickselect(arr, k, left, right, compare) {
     quickselectStep(arr, k, left || 0, right || (arr.length - 1), compare || defaultCompare$1);
 }
@@ -22798,7 +24249,7 @@ class FillBucket {
                 lineSegment.vertexLength += ring.length;
                 lineSegment.primitiveLength += ring.length;
             }
-            const indices = earcutExports(flattened, holeIndices);
+            const indices = earcut$1(flattened, holeIndices);
             for (let i = 0; i < indices.length; i += 3) {
                 this.indexArray.emplaceBack(triangleIndex + indices[i], triangleIndex + indices[i + 1], triangleIndex + indices[i + 2]);
             }
@@ -22812,16 +24263,16 @@ register('FillBucket', FillBucket, { omit: ['layers', 'patternFeatures'] });
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
 const layout$3 = new Properties({
-    "fill-sort-key": new DataDrivenProperty(spec["layout_fill"]["fill-sort-key"]),
+    "fill-sort-key": new DataDrivenProperty(v8Spec["layout_fill"]["fill-sort-key"]),
 });
 const paint$5 = new Properties({
-    "fill-antialias": new DataConstantProperty(spec["paint_fill"]["fill-antialias"]),
-    "fill-opacity": new DataDrivenProperty(spec["paint_fill"]["fill-opacity"]),
-    "fill-color": new DataDrivenProperty(spec["paint_fill"]["fill-color"]),
-    "fill-outline-color": new DataDrivenProperty(spec["paint_fill"]["fill-outline-color"]),
-    "fill-translate": new DataConstantProperty(spec["paint_fill"]["fill-translate"]),
-    "fill-translate-anchor": new DataConstantProperty(spec["paint_fill"]["fill-translate-anchor"]),
-    "fill-pattern": new CrossFadedDataDrivenProperty(spec["paint_fill"]["fill-pattern"]),
+    "fill-antialias": new DataConstantProperty(v8Spec["paint_fill"]["fill-antialias"]),
+    "fill-opacity": new DataDrivenProperty(v8Spec["paint_fill"]["fill-opacity"]),
+    "fill-color": new DataDrivenProperty(v8Spec["paint_fill"]["fill-color"]),
+    "fill-outline-color": new DataDrivenProperty(v8Spec["paint_fill"]["fill-outline-color"]),
+    "fill-translate": new DataConstantProperty(v8Spec["paint_fill"]["fill-translate"]),
+    "fill-translate-anchor": new DataConstantProperty(v8Spec["paint_fill"]["fill-translate-anchor"]),
+    "fill-pattern": new CrossFadedDataDrivenProperty(v8Spec["paint_fill"]["fill-pattern"]),
 });
 var properties$5 = { paint: paint$5, layout: layout$3 };
 
@@ -23096,6 +24547,8 @@ function signedArea(ring) {
     return sum;
 }
 
+var vectortilefeature$1 = /*@__PURE__*/getDefaultExportFromCjs(vectortilefeature);
+
 'use strict';
 
 var VectorTileFeature$1 = vectortilefeature;
@@ -23158,6 +24611,8 @@ VectorTileLayer$2.prototype.feature = function(i) {
     return new VectorTileFeature$1(this._pbf, end, this.extent, this._keys, this._values);
 };
 
+var vectortilelayer$1 = /*@__PURE__*/getDefaultExportFromCjs(vectortilelayer);
+
 'use strict';
 
 var VectorTileLayer$1 = vectortilelayer;
@@ -23174,6 +24629,8 @@ function readTile(tag, layers, pbf) {
         if (layer.length) layers[layer.name] = layer;
     }
 }
+
+var vectortile$1 = /*@__PURE__*/getDefaultExportFromCjs(vectortile);
 
 var VectorTile = vectorTile.VectorTile = vectortile;
 var VectorTileFeature = vectorTile.VectorTileFeature = vectortilefeature;
@@ -23347,7 +24804,7 @@ class FillExtrusionBucket {
                     flattened.push(p.y);
                 }
             }
-            const indices = earcutExports(flattened, holeIndices);
+            const indices = earcut$1(flattened, holeIndices);
             for (let j = 0; j < indices.length; j += 3) {
                 // Counter-clockwise winding order.
                 this.indexArray.emplaceBack(triangleIndex + indices[j], triangleIndex + indices[j + 2], triangleIndex + indices[j + 1]);
@@ -23376,18 +24833,18 @@ function isEntirelyOutside(ring) {
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
 const paint$4 = new Properties({
-    "fill-extrusion-opacity": new DataConstantProperty(spec["paint_fill-extrusion"]["fill-extrusion-opacity"]),
-    "fill-extrusion-color": new DataDrivenProperty(spec["paint_fill-extrusion"]["fill-extrusion-color"]),
-    "fill-extrusion-translate": new DataConstantProperty(spec["paint_fill-extrusion"]["fill-extrusion-translate"]),
-    "fill-extrusion-translate-anchor": new DataConstantProperty(spec["paint_fill-extrusion"]["fill-extrusion-translate-anchor"]),
-    "fill-extrusion-pattern": new CrossFadedDataDrivenProperty(spec["paint_fill-extrusion"]["fill-extrusion-pattern"]),
-    "fill-extrusion-height": new DataDrivenProperty(spec["paint_fill-extrusion"]["fill-extrusion-height"]),
-    "fill-extrusion-base": new DataDrivenProperty(spec["paint_fill-extrusion"]["fill-extrusion-base"]),
-    "fill-extrusion-vertical-gradient": new DataConstantProperty(spec["paint_fill-extrusion"]["fill-extrusion-vertical-gradient"]),
+    "fill-extrusion-opacity": new DataConstantProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-opacity"]),
+    "fill-extrusion-color": new DataDrivenProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-color"]),
+    "fill-extrusion-translate": new DataConstantProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-translate"]),
+    "fill-extrusion-translate-anchor": new DataConstantProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-translate-anchor"]),
+    "fill-extrusion-pattern": new CrossFadedDataDrivenProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-pattern"]),
+    "fill-extrusion-height": new DataDrivenProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-height"]),
+    "fill-extrusion-base": new DataDrivenProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-base"]),
+    "fill-extrusion-vertical-gradient": new DataConstantProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-vertical-gradient"]),
 });
 var properties$4 = { paint: paint$4 };
 
-class Point3D extends pointGeometry {
+class Point3D extends Point$2 {
 }
 class FillExtrusionStyleLayer extends StyleLayer {
     constructor(layer) {
@@ -23527,10 +24984,10 @@ function projectExtrusion(geometry, zBase, zTop, m) {
             const topY = sY + topYZ;
             const topZ = sZ + topZZ;
             const topW = sW + topWZ;
-            const b = new pointGeometry(baseX / baseW, baseY / baseW);
+            const b = new Point$2(baseX / baseW, baseY / baseW);
             b.z = baseZ / baseW;
             ringBase.push(b);
-            const t = new pointGeometry(topX / topW, topY / topW);
+            const t = new Point$2(topX / topW, topY / topW);
             t.z = topZ / topW;
             ringTop.push(t);
         }
@@ -23544,7 +25001,7 @@ function projectQueryGeometry(queryGeometry, pixelPosMatrix, transform, z) {
     for (const p of queryGeometry) {
         const v = [p.x, p.y, z, 1];
         transformMat4$1(v, v, pixelPosMatrix);
-        projectedQueryGeometry.push(new pointGeometry(v[0] / v[3], v[1] / v[3]));
+        projectedQueryGeometry.push(new Point$2(v[0] / v[3], v[1] / v[3]));
     }
     return projectedQueryGeometry;
 }
@@ -24007,24 +25464,24 @@ register('LineBucket', LineBucket, { omit: ['layers', 'patternFeatures'] });
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
 const layout$1 = new Properties({
-    "line-cap": new DataConstantProperty(spec["layout_line"]["line-cap"]),
-    "line-join": new DataDrivenProperty(spec["layout_line"]["line-join"]),
-    "line-miter-limit": new DataConstantProperty(spec["layout_line"]["line-miter-limit"]),
-    "line-round-limit": new DataConstantProperty(spec["layout_line"]["line-round-limit"]),
-    "line-sort-key": new DataDrivenProperty(spec["layout_line"]["line-sort-key"]),
+    "line-cap": new DataConstantProperty(v8Spec["layout_line"]["line-cap"]),
+    "line-join": new DataDrivenProperty(v8Spec["layout_line"]["line-join"]),
+    "line-miter-limit": new DataConstantProperty(v8Spec["layout_line"]["line-miter-limit"]),
+    "line-round-limit": new DataConstantProperty(v8Spec["layout_line"]["line-round-limit"]),
+    "line-sort-key": new DataDrivenProperty(v8Spec["layout_line"]["line-sort-key"]),
 });
 const paint$3 = new Properties({
-    "line-opacity": new DataDrivenProperty(spec["paint_line"]["line-opacity"]),
-    "line-color": new DataDrivenProperty(spec["paint_line"]["line-color"]),
-    "line-translate": new DataConstantProperty(spec["paint_line"]["line-translate"]),
-    "line-translate-anchor": new DataConstantProperty(spec["paint_line"]["line-translate-anchor"]),
-    "line-width": new DataDrivenProperty(spec["paint_line"]["line-width"]),
-    "line-gap-width": new DataDrivenProperty(spec["paint_line"]["line-gap-width"]),
-    "line-offset": new DataDrivenProperty(spec["paint_line"]["line-offset"]),
-    "line-blur": new DataDrivenProperty(spec["paint_line"]["line-blur"]),
-    "line-dasharray": new CrossFadedProperty(spec["paint_line"]["line-dasharray"]),
-    "line-pattern": new CrossFadedDataDrivenProperty(spec["paint_line"]["line-pattern"]),
-    "line-gradient": new ColorRampProperty(spec["paint_line"]["line-gradient"]),
+    "line-opacity": new DataDrivenProperty(v8Spec["paint_line"]["line-opacity"]),
+    "line-color": new DataDrivenProperty(v8Spec["paint_line"]["line-color"]),
+    "line-translate": new DataConstantProperty(v8Spec["paint_line"]["line-translate"]),
+    "line-translate-anchor": new DataConstantProperty(v8Spec["paint_line"]["line-translate-anchor"]),
+    "line-width": new DataDrivenProperty(v8Spec["paint_line"]["line-width"]),
+    "line-gap-width": new DataDrivenProperty(v8Spec["paint_line"]["line-gap-width"]),
+    "line-offset": new DataDrivenProperty(v8Spec["paint_line"]["line-offset"]),
+    "line-blur": new DataDrivenProperty(v8Spec["paint_line"]["line-blur"]),
+    "line-dasharray": new CrossFadedProperty(v8Spec["paint_line"]["line-dasharray"]),
+    "line-pattern": new CrossFadedDataDrivenProperty(v8Spec["paint_line"]["line-pattern"]),
+    "line-gradient": new ColorRampProperty(v8Spec["paint_line"]["line-gradient"]),
 });
 var properties$3 = { paint: paint$3, layout: layout$1 };
 
@@ -25119,6 +26576,8 @@ function writeUtf8(buf, str, pos) {
     return pos;
 }
 
+var Protobuf = /*@__PURE__*/getDefaultExportFromCjs(pbf);
+
 const border$1 = 3;
 function readFontstacks(tag, glyphs, pbf) {
     if (tag === 1) {
@@ -25155,7 +26614,7 @@ function readGlyph(tag, glyph, pbf) {
         glyph.advance = pbf.readVarint();
 }
 function parseGlyphPbf(data) {
-    return new pbf(data).readFields(readFontstacks, []);
+    return new Protobuf(data).readFields(readFontstacks, []);
 }
 const GLYPH_PBF_BORDER = border$1;
 
@@ -25916,7 +27375,9 @@ function fitIconToText(shapedIcon, shapedText, textFit, padding, iconOffset, fon
     return { image, top, right, bottom, left, collisionPadding };
 }
 
+const MAX_GLYPH_ICON_SIZE = 255;
 const SIZE_PACK_FACTOR = 128;
+const MAX_PACKED_SIZE = MAX_GLYPH_ICON_SIZE * SIZE_PACK_FACTOR;
 // For {text,icon}-size, get the bucket-level data that will be needed by
 // the painter to set symbol-size-related uniforms
 function getSizeData(tileZoom, value) {
@@ -25959,7 +27420,7 @@ function evaluateSizeForFeature(sizeData, { uSize, uSizeT }, { lowerSize, upperS
         return lowerSize / SIZE_PACK_FACTOR;
     }
     else if (sizeData.kind === 'composite') {
-        return number(lowerSize / SIZE_PACK_FACTOR, upperSize / SIZE_PACK_FACTOR, uSizeT);
+        return interpolate.number(lowerSize / SIZE_PACK_FACTOR, upperSize / SIZE_PACK_FACTOR, uSizeT);
     }
     return uSize;
 }
@@ -25976,9 +27437,9 @@ function evaluateSizeForZoom(sizeData, zoom) {
         // between the camera function values at a pair of zoom stops covering
         // [tileZoom, tileZoom + 1] in order to be consistent with this
         // restriction on composite functions
-        const t = !interpolationType ? 0 : clamp(Interpolate.interpolationFactor(interpolationType, zoom, minZoom, maxZoom), 0, 1);
+        const t = !interpolationType ? 0 : clamp$1(Interpolate.interpolationFactor(interpolationType, zoom, minZoom, maxZoom), 0, 1);
         if (sizeData.kind === 'camera') {
-            uSize = number(sizeData.minSize, sizeData.maxSize, t);
+            uSize = interpolate.number(sizeData.minSize, sizeData.maxSize, t);
         }
         else {
             uSizeT = t;
@@ -25987,1256 +27448,18 @@ function evaluateSizeForZoom(sizeData, zoom) {
     return { uSizeT, uSize };
 }
 
-class Anchor extends pointGeometry {
-    constructor(x, y, angle, segment) {
-        super(x, y);
-        this.angle = angle;
-        if (segment !== undefined) {
-            this.segment = segment;
-        }
+function getOverlapMode(layout, overlapProp, allowOverlapProp) {
+    let result = 'never';
+    const overlap = layout.get(overlapProp);
+    if (overlap) {
+        // if -overlap is set, use it
+        result = overlap;
     }
-    clone() {
-        return new Anchor(this.x, this.y, this.angle, this.segment);
+    else if (layout.get(allowOverlapProp)) {
+        // fall back to -allow-overlap, with false='never', true='always'
+        result = 'always';
     }
-}
-register('Anchor', Anchor);
-
-/**
- * Labels placed around really sharp angles aren't readable. Check if any
- * part of the potential label has a combined angle that is too big.
- *
- * @param line
- * @param anchor The point on the line around which the label is anchored.
- * @param labelLength The length of the label in geometry units.
- * @param windowSize The check fails if the combined angles within a part of the line that is `windowSize` long is too big.
- * @param maxAngle The maximum combined angle that any window along the label is allowed to have.
- *
- * @returns {boolean} whether the label should be placed
- * @private
- */
-function checkMaxAngle(line, anchor, labelLength, windowSize, maxAngle) {
-    // horizontal labels always pass
-    if (anchor.segment === undefined)
-        return true;
-    let p = anchor;
-    let index = anchor.segment + 1;
-    let anchorDistance = 0;
-    // move backwards along the line to the first segment the label appears on
-    while (anchorDistance > -labelLength / 2) {
-        index--;
-        // there isn't enough room for the label after the beginning of the line
-        if (index < 0)
-            return false;
-        anchorDistance -= line[index].dist(p);
-        p = line[index];
-    }
-    anchorDistance += line[index].dist(line[index + 1]);
-    index++;
-    // store recent corners and their total angle difference
-    const recentCorners = [];
-    let recentAngleDelta = 0;
-    // move forwards by the length of the label and check angles along the way
-    while (anchorDistance < labelLength / 2) {
-        const prev = line[index - 1];
-        const current = line[index];
-        const next = line[index + 1];
-        // there isn't enough room for the label before the end of the line
-        if (!next)
-            return false;
-        let angleDelta = prev.angleTo(current) - current.angleTo(next);
-        // restrict angle to -pi..pi range
-        angleDelta = Math.abs(((angleDelta + 3 * Math.PI) % (Math.PI * 2)) - Math.PI);
-        recentCorners.push({
-            distance: anchorDistance,
-            angleDelta
-        });
-        recentAngleDelta += angleDelta;
-        // remove corners that are far enough away from the list of recent anchors
-        while (anchorDistance - recentCorners[0].distance > windowSize) {
-            recentAngleDelta -= recentCorners.shift().angleDelta;
-        }
-        // the sum of angles within the window area exceeds the maximum allowed value. check fails.
-        if (recentAngleDelta > maxAngle)
-            return false;
-        index++;
-        anchorDistance += current.dist(next);
-    }
-    // no part of the line had an angle greater than the maximum allowed. check passes.
-    return true;
-}
-
-function getLineLength(line) {
-    let lineLength = 0;
-    for (let k = 0; k < line.length - 1; k++) {
-        lineLength += line[k].dist(line[k + 1]);
-    }
-    return lineLength;
-}
-function getAngleWindowSize(shapedText, glyphSize, boxScale) {
-    return shapedText ?
-        3 / 5 * glyphSize * boxScale :
-        0;
-}
-function getShapedLabelLength(shapedText, shapedIcon) {
-    return Math.max(shapedText ? shapedText.right - shapedText.left : 0, shapedIcon ? shapedIcon.right - shapedIcon.left : 0);
-}
-function getCenterAnchor(line, maxAngle, shapedText, shapedIcon, glyphSize, boxScale) {
-    const angleWindowSize = getAngleWindowSize(shapedText, glyphSize, boxScale);
-    const labelLength = getShapedLabelLength(shapedText, shapedIcon) * boxScale;
-    let prevDistance = 0;
-    const centerDistance = getLineLength(line) / 2;
-    for (let i = 0; i < line.length - 1; i++) {
-        const a = line[i], b = line[i + 1];
-        const segmentDistance = a.dist(b);
-        if (prevDistance + segmentDistance > centerDistance) {
-            // The center is on this segment
-            const t = (centerDistance - prevDistance) / segmentDistance, x = number(a.x, b.x, t), y = number(a.y, b.y, t);
-            const anchor = new Anchor(x, y, b.angleTo(a), i);
-            anchor._round();
-            if (!angleWindowSize || checkMaxAngle(line, anchor, labelLength, angleWindowSize, maxAngle)) {
-                return anchor;
-            }
-            else {
-                return;
-            }
-        }
-        prevDistance += segmentDistance;
-    }
-}
-function getAnchors(line, spacing, maxAngle, shapedText, shapedIcon, glyphSize, boxScale, overscaling, tileExtent) {
-    // Resample a line to get anchor points for labels and check that each
-    // potential label passes text-max-angle check and has enough froom to fit
-    // on the line.
-    const angleWindowSize = getAngleWindowSize(shapedText, glyphSize, boxScale);
-    const shapedLabelLength = getShapedLabelLength(shapedText, shapedIcon);
-    const labelLength = shapedLabelLength * boxScale;
-    // Is the line continued from outside the tile boundary?
-    const isLineContinued = line[0].x === 0 || line[0].x === tileExtent || line[0].y === 0 || line[0].y === tileExtent;
-    // Is the label long, relative to the spacing?
-    // If so, adjust the spacing so there is always a minimum space of `spacing / 4` between label edges.
-    if (spacing - labelLength < spacing / 4) {
-        spacing = labelLength + spacing / 4;
-    }
-    // Offset the first anchor by:
-    // Either half the label length plus a fixed extra offset if the line is not continued
-    // Or half the spacing if the line is continued.
-    // For non-continued lines, add a bit of fixed extra offset to avoid collisions at T intersections.
-    const fixedExtraOffset = glyphSize * 2;
-    const offset = !isLineContinued ?
-        ((shapedLabelLength / 2 + fixedExtraOffset) * boxScale * overscaling) % spacing :
-        (spacing / 2 * overscaling) % spacing;
-    return resample(line, offset, spacing, angleWindowSize, maxAngle, labelLength, isLineContinued, false, tileExtent);
-}
-function resample(line, offset, spacing, angleWindowSize, maxAngle, labelLength, isLineContinued, placeAtMiddle, tileExtent) {
-    const halfLabelLength = labelLength / 2;
-    const lineLength = getLineLength(line);
-    let distance = 0, markedDistance = offset - spacing;
-    let anchors = [];
-    for (let i = 0; i < line.length - 1; i++) {
-        const a = line[i], b = line[i + 1];
-        const segmentDist = a.dist(b), angle = b.angleTo(a);
-        while (markedDistance + spacing < distance + segmentDist) {
-            markedDistance += spacing;
-            const t = (markedDistance - distance) / segmentDist, x = number(a.x, b.x, t), y = number(a.y, b.y, t);
-            // Check that the point is within the tile boundaries and that
-            // the label would fit before the beginning and end of the line
-            // if placed at this point.
-            if (x >= 0 && x < tileExtent && y >= 0 && y < tileExtent &&
-                markedDistance - halfLabelLength >= 0 &&
-                markedDistance + halfLabelLength <= lineLength) {
-                const anchor = new Anchor(x, y, angle, i);
-                anchor._round();
-                if (!angleWindowSize || checkMaxAngle(line, anchor, labelLength, angleWindowSize, maxAngle)) {
-                    anchors.push(anchor);
-                }
-            }
-        }
-        distance += segmentDist;
-    }
-    if (!placeAtMiddle && !anchors.length && !isLineContinued) {
-        // The first attempt at finding anchors at which labels can be placed failed.
-        // Try again, but this time just try placing one anchor at the middle of the line.
-        // This has the most effect for short lines in overscaled tiles, since the
-        // initial offset used in overscaled tiles is calculated to align labels with positions in
-        // parent tiles instead of placing the label as close to the beginning as possible.
-        anchors = resample(line, distance / 2, spacing, angleWindowSize, maxAngle, labelLength, isLineContinued, true, tileExtent);
-    }
-    return anchors;
-}
-
-/**
- * Returns the part of a multiline that intersects with the provided rectangular box.
- *
- * @param lines
- * @param x1 the left edge of the box
- * @param y1 the top edge of the box
- * @param x2 the right edge of the box
- * @param y2 the bottom edge of the box
- * @returns lines
- * @private
- */
-function clipLine(lines, x1, y1, x2, y2) {
-    const clippedLines = [];
-    for (let l = 0; l < lines.length; l++) {
-        const line = lines[l];
-        let clippedLine;
-        for (let i = 0; i < line.length - 1; i++) {
-            let p0 = line[i];
-            let p1 = line[i + 1];
-            if (p0.x < x1 && p1.x < x1) {
-                continue;
-            }
-            else if (p0.x < x1) {
-                p0 = new pointGeometry(x1, p0.y + (p1.y - p0.y) * ((x1 - p0.x) / (p1.x - p0.x)))._round();
-            }
-            else if (p1.x < x1) {
-                p1 = new pointGeometry(x1, p0.y + (p1.y - p0.y) * ((x1 - p0.x) / (p1.x - p0.x)))._round();
-            }
-            if (p0.y < y1 && p1.y < y1) {
-                continue;
-            }
-            else if (p0.y < y1) {
-                p0 = new pointGeometry(p0.x + (p1.x - p0.x) * ((y1 - p0.y) / (p1.y - p0.y)), y1)._round();
-            }
-            else if (p1.y < y1) {
-                p1 = new pointGeometry(p0.x + (p1.x - p0.x) * ((y1 - p0.y) / (p1.y - p0.y)), y1)._round();
-            }
-            if (p0.x >= x2 && p1.x >= x2) {
-                continue;
-            }
-            else if (p0.x >= x2) {
-                p0 = new pointGeometry(x2, p0.y + (p1.y - p0.y) * ((x2 - p0.x) / (p1.x - p0.x)))._round();
-            }
-            else if (p1.x >= x2) {
-                p1 = new pointGeometry(x2, p0.y + (p1.y - p0.y) * ((x2 - p0.x) / (p1.x - p0.x)))._round();
-            }
-            if (p0.y >= y2 && p1.y >= y2) {
-                continue;
-            }
-            else if (p0.y >= y2) {
-                p0 = new pointGeometry(p0.x + (p1.x - p0.x) * ((y2 - p0.y) / (p1.y - p0.y)), y2)._round();
-            }
-            else if (p1.y >= y2) {
-                p1 = new pointGeometry(p0.x + (p1.x - p0.x) * ((y2 - p0.y) / (p1.y - p0.y)), y2)._round();
-            }
-            if (!clippedLine || !p0.equals(clippedLine[clippedLine.length - 1])) {
-                clippedLine = [p0];
-                clippedLines.push(clippedLine);
-            }
-            clippedLine.push(p1);
-        }
-    }
-    return clippedLines;
-}
-
-// If you have a 10px icon that isn't perfectly aligned to the pixel grid it will cover 11 actual
-// pixels. The quad needs to be padded to account for this, otherwise they'll look slightly clipped
-// on one edge in some cases.
-const border = IMAGE_PADDING;
-/**
- * Create the quads used for rendering an icon.
- * @private
- */
-function getIconQuads(shapedIcon, iconRotate, isSDFIcon, hasIconTextFit) {
-    const quads = [];
-    const image = shapedIcon.image;
-    const pixelRatio = image.pixelRatio;
-    const imageWidth = image.paddedRect.w - 2 * border;
-    const imageHeight = image.paddedRect.h - 2 * border;
-    const iconWidth = shapedIcon.right - shapedIcon.left;
-    const iconHeight = shapedIcon.bottom - shapedIcon.top;
-    const stretchX = image.stretchX || [[0, imageWidth]];
-    const stretchY = image.stretchY || [[0, imageHeight]];
-    const reduceRanges = (sum, range) => sum + range[1] - range[0];
-    const stretchWidth = stretchX.reduce(reduceRanges, 0);
-    const stretchHeight = stretchY.reduce(reduceRanges, 0);
-    const fixedWidth = imageWidth - stretchWidth;
-    const fixedHeight = imageHeight - stretchHeight;
-    let stretchOffsetX = 0;
-    let stretchContentWidth = stretchWidth;
-    let stretchOffsetY = 0;
-    let stretchContentHeight = stretchHeight;
-    let fixedOffsetX = 0;
-    let fixedContentWidth = fixedWidth;
-    let fixedOffsetY = 0;
-    let fixedContentHeight = fixedHeight;
-    if (image.content && hasIconTextFit) {
-        const content = image.content;
-        stretchOffsetX = sumWithinRange(stretchX, 0, content[0]);
-        stretchOffsetY = sumWithinRange(stretchY, 0, content[1]);
-        stretchContentWidth = sumWithinRange(stretchX, content[0], content[2]);
-        stretchContentHeight = sumWithinRange(stretchY, content[1], content[3]);
-        fixedOffsetX = content[0] - stretchOffsetX;
-        fixedOffsetY = content[1] - stretchOffsetY;
-        fixedContentWidth = content[2] - content[0] - stretchContentWidth;
-        fixedContentHeight = content[3] - content[1] - stretchContentHeight;
-    }
-    const makeBox = (left, top, right, bottom) => {
-        const leftEm = getEmOffset(left.stretch - stretchOffsetX, stretchContentWidth, iconWidth, shapedIcon.left);
-        const leftPx = getPxOffset(left.fixed - fixedOffsetX, fixedContentWidth, left.stretch, stretchWidth);
-        const topEm = getEmOffset(top.stretch - stretchOffsetY, stretchContentHeight, iconHeight, shapedIcon.top);
-        const topPx = getPxOffset(top.fixed - fixedOffsetY, fixedContentHeight, top.stretch, stretchHeight);
-        const rightEm = getEmOffset(right.stretch - stretchOffsetX, stretchContentWidth, iconWidth, shapedIcon.left);
-        const rightPx = getPxOffset(right.fixed - fixedOffsetX, fixedContentWidth, right.stretch, stretchWidth);
-        const bottomEm = getEmOffset(bottom.stretch - stretchOffsetY, stretchContentHeight, iconHeight, shapedIcon.top);
-        const bottomPx = getPxOffset(bottom.fixed - fixedOffsetY, fixedContentHeight, bottom.stretch, stretchHeight);
-        const tl = new pointGeometry(leftEm, topEm);
-        const tr = new pointGeometry(rightEm, topEm);
-        const br = new pointGeometry(rightEm, bottomEm);
-        const bl = new pointGeometry(leftEm, bottomEm);
-        const pixelOffsetTL = new pointGeometry(leftPx / pixelRatio, topPx / pixelRatio);
-        const pixelOffsetBR = new pointGeometry(rightPx / pixelRatio, bottomPx / pixelRatio);
-        const angle = iconRotate * Math.PI / 180;
-        if (angle) {
-            const sin = Math.sin(angle), cos = Math.cos(angle), matrix = [cos, -sin, sin, cos];
-            tl._matMult(matrix);
-            tr._matMult(matrix);
-            bl._matMult(matrix);
-            br._matMult(matrix);
-        }
-        const x1 = left.stretch + left.fixed;
-        const x2 = right.stretch + right.fixed;
-        const y1 = top.stretch + top.fixed;
-        const y2 = bottom.stretch + bottom.fixed;
-        const subRect = {
-            x: image.paddedRect.x + border + x1,
-            y: image.paddedRect.y + border + y1,
-            w: x2 - x1,
-            h: y2 - y1
-        };
-        const minFontScaleX = fixedContentWidth / pixelRatio / iconWidth;
-        const minFontScaleY = fixedContentHeight / pixelRatio / iconHeight;
-        // Icon quad is padded, so texture coordinates also need to be padded.
-        return { tl, tr, bl, br, tex: subRect, writingMode: undefined, glyphOffset: [0, 0], sectionIndex: 0, pixelOffsetTL, pixelOffsetBR, minFontScaleX, minFontScaleY, isSDF: isSDFIcon };
-    };
-    if (!hasIconTextFit || (!image.stretchX && !image.stretchY)) {
-        quads.push(makeBox({ fixed: 0, stretch: -1 }, { fixed: 0, stretch: -1 }, { fixed: 0, stretch: imageWidth + 1 }, { fixed: 0, stretch: imageHeight + 1 }));
-    }
-    else {
-        const xCuts = stretchZonesToCuts(stretchX, fixedWidth, stretchWidth);
-        const yCuts = stretchZonesToCuts(stretchY, fixedHeight, stretchHeight);
-        for (let xi = 0; xi < xCuts.length - 1; xi++) {
-            const x1 = xCuts[xi];
-            const x2 = xCuts[xi + 1];
-            for (let yi = 0; yi < yCuts.length - 1; yi++) {
-                const y1 = yCuts[yi];
-                const y2 = yCuts[yi + 1];
-                quads.push(makeBox(x1, y1, x2, y2));
-            }
-        }
-    }
-    return quads;
-}
-function sumWithinRange(ranges, min, max) {
-    let sum = 0;
-    for (const range of ranges) {
-        sum += Math.max(min, Math.min(max, range[1])) - Math.max(min, Math.min(max, range[0]));
-    }
-    return sum;
-}
-function stretchZonesToCuts(stretchZones, fixedSize, stretchSize) {
-    const cuts = [{ fixed: -border, stretch: 0 }];
-    for (const [c1, c2] of stretchZones) {
-        const last = cuts[cuts.length - 1];
-        cuts.push({
-            fixed: c1 - last.stretch,
-            stretch: last.stretch
-        });
-        cuts.push({
-            fixed: c1 - last.stretch,
-            stretch: last.stretch + (c2 - c1)
-        });
-    }
-    cuts.push({
-        fixed: fixedSize + border,
-        stretch: stretchSize
-    });
-    return cuts;
-}
-function getEmOffset(stretchOffset, stretchSize, iconSize, iconOffset) {
-    return stretchOffset / stretchSize * iconSize + iconOffset;
-}
-function getPxOffset(fixedOffset, fixedSize, stretchOffset, stretchSize) {
-    return fixedOffset - fixedSize * stretchOffset / stretchSize;
-}
-/**
- * Create the quads used for rendering a text label.
- * @private
- */
-function getGlyphQuads(anchor, shaping, textOffset, layer, alongLine, feature, imageMap, allowVerticalPlacement) {
-    const textRotate = layer.layout.get('text-rotate').evaluate(feature, {}) * Math.PI / 180;
-    const quads = [];
-    for (const line of shaping.positionedLines) {
-        for (const positionedGlyph of line.positionedGlyphs) {
-            if (!positionedGlyph.rect)
-                continue;
-            const textureRect = positionedGlyph.rect || {};
-            // The rects have an additional buffer that is not included in their size.
-            const glyphPadding = 1.0;
-            let rectBuffer = GLYPH_PBF_BORDER + glyphPadding;
-            let isSDF = true;
-            let pixelRatio = 1.0;
-            let lineOffset = 0.0;
-            const rotateVerticalGlyph = (alongLine || allowVerticalPlacement) && positionedGlyph.vertical;
-            const halfAdvance = positionedGlyph.metrics.advance * positionedGlyph.scale / 2;
-            // Align images and scaled glyphs in the middle of a vertical line.
-            if (allowVerticalPlacement && shaping.verticalizable) {
-                const scaledGlyphOffset = (positionedGlyph.scale - 1) * ONE_EM;
-                const imageOffset = (ONE_EM - positionedGlyph.metrics.width * positionedGlyph.scale) / 2;
-                lineOffset = line.lineOffset / 2 - (positionedGlyph.imageName ? -imageOffset : scaledGlyphOffset);
-            }
-            if (positionedGlyph.imageName) {
-                const image = imageMap[positionedGlyph.imageName];
-                isSDF = image.sdf;
-                pixelRatio = image.pixelRatio;
-                rectBuffer = IMAGE_PADDING / pixelRatio;
-            }
-            const glyphOffset = alongLine ?
-                [positionedGlyph.x + halfAdvance, positionedGlyph.y] :
-                [0, 0];
-            let builtInOffset = alongLine ?
-                [0, 0] :
-                [positionedGlyph.x + halfAdvance + textOffset[0], positionedGlyph.y + textOffset[1] - lineOffset];
-            let verticalizedLabelOffset = [0, 0];
-            if (rotateVerticalGlyph) {
-                // Vertical POI labels that are rotated 90deg CW and whose glyphs must preserve upright orientation
-                // need to be rotated 90deg CCW. After a quad is rotated, it is translated to the original built-in offset.
-                verticalizedLabelOffset = builtInOffset;
-                builtInOffset = [0, 0];
-            }
-            const x1 = (positionedGlyph.metrics.left - rectBuffer) * positionedGlyph.scale - halfAdvance + builtInOffset[0];
-            const y1 = (-positionedGlyph.metrics.top - rectBuffer) * positionedGlyph.scale + builtInOffset[1];
-            const x2 = x1 + textureRect.w * positionedGlyph.scale / pixelRatio;
-            const y2 = y1 + textureRect.h * positionedGlyph.scale / pixelRatio;
-            const tl = new pointGeometry(x1, y1);
-            const tr = new pointGeometry(x2, y1);
-            const bl = new pointGeometry(x1, y2);
-            const br = new pointGeometry(x2, y2);
-            if (rotateVerticalGlyph) {
-                // Vertical-supporting glyphs are laid out in 24x24 point boxes (1 square em)
-                // In horizontal orientation, the y values for glyphs are below the midline
-                // and we use a "yOffset" of -17 to pull them up to the middle.
-                // By rotating counter-clockwise around the point at the center of the left
-                // edge of a 24x24 layout box centered below the midline, we align the center
-                // of the glyphs with the horizontal midline, so the yOffset is no longer
-                // necessary, but we also pull the glyph to the left along the x axis.
-                // The y coordinate includes baseline yOffset, thus needs to be accounted
-                // for when glyph is rotated and translated.
-                const center = new pointGeometry(-halfAdvance, halfAdvance - SHAPING_DEFAULT_OFFSET);
-                const verticalRotation = -Math.PI / 2;
-                // xHalfWidthOffsetCorrection is a difference between full-width and half-width
-                // advance, should be 0 for full-width glyphs and will pull up half-width glyphs.
-                const xHalfWidthOffsetCorrection = ONE_EM / 2 - halfAdvance;
-                const yImageOffsetCorrection = positionedGlyph.imageName ? xHalfWidthOffsetCorrection : 0.0;
-                const halfWidthOffsetCorrection = new pointGeometry(5 - SHAPING_DEFAULT_OFFSET - xHalfWidthOffsetCorrection, -yImageOffsetCorrection);
-                const verticalOffsetCorrection = new pointGeometry(...verticalizedLabelOffset);
-                tl._rotateAround(verticalRotation, center)._add(halfWidthOffsetCorrection)._add(verticalOffsetCorrection);
-                tr._rotateAround(verticalRotation, center)._add(halfWidthOffsetCorrection)._add(verticalOffsetCorrection);
-                bl._rotateAround(verticalRotation, center)._add(halfWidthOffsetCorrection)._add(verticalOffsetCorrection);
-                br._rotateAround(verticalRotation, center)._add(halfWidthOffsetCorrection)._add(verticalOffsetCorrection);
-            }
-            if (textRotate) {
-                const sin = Math.sin(textRotate), cos = Math.cos(textRotate), matrix = [cos, -sin, sin, cos];
-                tl._matMult(matrix);
-                tr._matMult(matrix);
-                bl._matMult(matrix);
-                br._matMult(matrix);
-            }
-            const pixelOffsetTL = new pointGeometry(0, 0);
-            const pixelOffsetBR = new pointGeometry(0, 0);
-            const minFontScaleX = 0;
-            const minFontScaleY = 0;
-            quads.push({ tl, tr, bl, br, tex: textureRect, writingMode: shaping.writingMode, glyphOffset, sectionIndex: positionedGlyph.sectionIndex, isSDF, pixelOffsetTL, pixelOffsetBR, minFontScaleX, minFontScaleY });
-        }
-    }
-    return quads;
-}
-
-/**
- * A CollisionFeature represents the area of the tile covered by a single label.
- * It is used with CollisionIndex to check if the label overlaps with any
- * previous labels. A CollisionFeature is mostly just a set of CollisionBox
- * objects.
- *
- * @private
- */
-class CollisionFeature {
-    /**
-     * Create a CollisionFeature, adding its collision box data to the given collisionBoxArray in the process.
-     * For line aligned labels a collision circle diameter is computed instead.
-     *
-     * @param anchor The point along the line around which the label is anchored.
-     * @param shaped The text or icon shaping results.
-     * @param boxScale A magic number used to convert from glyph metrics units to geometry units.
-     * @param padding The amount of padding to add around the label edges.
-     * @param alignLine Whether the label is aligned with the line or the viewport.
-     * @private
-     */
-    constructor(collisionBoxArray, anchor, featureIndex, sourceLayerIndex, bucketIndex, shaped, boxScale, padding, alignLine, rotate) {
-        this.boxStartIndex = collisionBoxArray.length;
-        if (alignLine) {
-            // Compute height of the shape in glyph metrics and apply collision padding.
-            // Note that the pixel based 'text-padding' is applied at runtime
-            let top = shaped.top;
-            let bottom = shaped.bottom;
-            const collisionPadding = shaped.collisionPadding;
-            if (collisionPadding) {
-                top -= collisionPadding[1];
-                bottom += collisionPadding[3];
-            }
-            let height = bottom - top;
-            if (height > 0) {
-                // set minimum box height to avoid very many small labels
-                height = Math.max(10, height);
-                this.circleDiameter = height;
-            }
-        }
-        else {
-            // margin is in CSS order: [top, right, bottom, left]
-            let y1 = shaped.top * boxScale - padding[0];
-            let y2 = shaped.bottom * boxScale + padding[2];
-            let x1 = shaped.left * boxScale - padding[3];
-            let x2 = shaped.right * boxScale + padding[1];
-            const collisionPadding = shaped.collisionPadding;
-            if (collisionPadding) {
-                x1 -= collisionPadding[0] * boxScale;
-                y1 -= collisionPadding[1] * boxScale;
-                x2 += collisionPadding[2] * boxScale;
-                y2 += collisionPadding[3] * boxScale;
-            }
-            if (rotate) {
-                // Account for *-rotate in point collision boxes
-                // See https://github.com/mapbox/mapbox-gl-js/issues/6075
-                // Doesn't account for icon-text-fit
-                const tl = new pointGeometry(x1, y1);
-                const tr = new pointGeometry(x2, y1);
-                const bl = new pointGeometry(x1, y2);
-                const br = new pointGeometry(x2, y2);
-                const rotateRadians = rotate * Math.PI / 180;
-                tl._rotate(rotateRadians);
-                tr._rotate(rotateRadians);
-                bl._rotate(rotateRadians);
-                br._rotate(rotateRadians);
-                // Collision features require an "on-axis" geometry,
-                // so take the envelope of the rotated geometry
-                // (may be quite large for wide labels rotated 45 degrees)
-                x1 = Math.min(tl.x, tr.x, bl.x, br.x);
-                x2 = Math.max(tl.x, tr.x, bl.x, br.x);
-                y1 = Math.min(tl.y, tr.y, bl.y, br.y);
-                y2 = Math.max(tl.y, tr.y, bl.y, br.y);
-            }
-            collisionBoxArray.emplaceBack(anchor.x, anchor.y, x1, y1, x2, y2, featureIndex, sourceLayerIndex, bucketIndex);
-        }
-        this.boxEndIndex = collisionBoxArray.length;
-    }
-}
-
-class TinyQueue {
-    constructor(data = [], compare = defaultCompare) {
-        this.data = data;
-        this.length = this.data.length;
-        this.compare = compare;
-
-        if (this.length > 0) {
-            for (let i = (this.length >> 1) - 1; i >= 0; i--) this._down(i);
-        }
-    }
-
-    push(item) {
-        this.data.push(item);
-        this.length++;
-        this._up(this.length - 1);
-    }
-
-    pop() {
-        if (this.length === 0) return undefined;
-
-        const top = this.data[0];
-        const bottom = this.data.pop();
-        this.length--;
-
-        if (this.length > 0) {
-            this.data[0] = bottom;
-            this._down(0);
-        }
-
-        return top;
-    }
-
-    peek() {
-        return this.data[0];
-    }
-
-    _up(pos) {
-        const {data, compare} = this;
-        const item = data[pos];
-
-        while (pos > 0) {
-            const parent = (pos - 1) >> 1;
-            const current = data[parent];
-            if (compare(item, current) >= 0) break;
-            data[pos] = current;
-            pos = parent;
-        }
-
-        data[pos] = item;
-    }
-
-    _down(pos) {
-        const {data, compare} = this;
-        const halfLength = this.length >> 1;
-        const item = data[pos];
-
-        while (pos < halfLength) {
-            let left = (pos << 1) + 1;
-            let best = data[left];
-            const right = left + 1;
-
-            if (right < this.length && compare(data[right], best) < 0) {
-                left = right;
-                best = data[right];
-            }
-            if (compare(best, item) >= 0) break;
-
-            data[pos] = best;
-            pos = left;
-        }
-
-        data[pos] = item;
-    }
-}
-
-function defaultCompare(a, b) {
-    return a < b ? -1 : a > b ? 1 : 0;
-}
-
-/**
- * Finds an approximation of a polygon's Pole Of Inaccessibiliy https://en.wikipedia.org/wiki/Pole_of_inaccessibility
- * This is a copy of http://github.com/mapbox/polylabel adapted to use Points
- *
- * @param polygonRings first item in array is the outer ring followed optionally by the list of holes, should be an element of the result of util/classify_rings
- * @param precision Specified in input coordinate units. If 0 returns after first run, if > 0 repeatedly narrows the search space until the radius of the area searched for the best pole is less than precision
- * @param debug Print some statistics to the console during execution
- * @returns Pole of Inaccessibiliy.
- * @private
- */
-function findPoleOfInaccessibility(polygonRings, precision = 1, debug = false) {
-    // find the bounding box of the outer ring
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const outerRing = polygonRings[0];
-    for (let i = 0; i < outerRing.length; i++) {
-        const p = outerRing[i];
-        if (!i || p.x < minX)
-            minX = p.x;
-        if (!i || p.y < minY)
-            minY = p.y;
-        if (!i || p.x > maxX)
-            maxX = p.x;
-        if (!i || p.y > maxY)
-            maxY = p.y;
-    }
-    const width = maxX - minX;
-    const height = maxY - minY;
-    const cellSize = Math.min(width, height);
-    let h = cellSize / 2;
-    // a priority queue of cells in order of their "potential" (max distance to polygon)
-    const cellQueue = new TinyQueue([], compareMax);
-    if (cellSize === 0)
-        return new pointGeometry(minX, minY);
-    // cover polygon with initial cells
-    for (let x = minX; x < maxX; x += cellSize) {
-        for (let y = minY; y < maxY; y += cellSize) {
-            cellQueue.push(new Cell(x + h, y + h, h, polygonRings));
-        }
-    }
-    // take centroid as the first best guess
-    let bestCell = getCentroidCell(polygonRings);
-    let numProbes = cellQueue.length;
-    while (cellQueue.length) {
-        // pick the most promising cell from the queue
-        const cell = cellQueue.pop();
-        // update the best cell if we found a better one
-        if (cell.d > bestCell.d || !bestCell.d) {
-            bestCell = cell;
-            if (debug)
-                console.log('found best %d after %d probes', Math.round(1e4 * cell.d) / 1e4, numProbes);
-        }
-        // do not drill down further if there's no chance of a better solution
-        if (cell.max - bestCell.d <= precision)
-            continue;
-        // split the cell into four cells
-        h = cell.h / 2;
-        cellQueue.push(new Cell(cell.p.x - h, cell.p.y - h, h, polygonRings));
-        cellQueue.push(new Cell(cell.p.x + h, cell.p.y - h, h, polygonRings));
-        cellQueue.push(new Cell(cell.p.x - h, cell.p.y + h, h, polygonRings));
-        cellQueue.push(new Cell(cell.p.x + h, cell.p.y + h, h, polygonRings));
-        numProbes += 4;
-    }
-    if (debug) {
-        console.log(`num probes: ${numProbes}`);
-        console.log(`best distance: ${bestCell.d}`);
-    }
-    return bestCell.p;
-}
-function compareMax(a, b) {
-    return b.max - a.max;
-}
-function Cell(x, y, h, polygon) {
-    this.p = new pointGeometry(x, y);
-    this.h = h; // half the cell size
-    this.d = pointToPolygonDist(this.p, polygon); // distance from cell center to polygon
-    this.max = this.d + this.h * Math.SQRT2; // max distance to polygon within a cell
-}
-// signed distance from point to polygon outline (negative if point is outside)
-function pointToPolygonDist(p, polygon) {
-    let inside = false;
-    let minDistSq = Infinity;
-    for (let k = 0; k < polygon.length; k++) {
-        const ring = polygon[k];
-        for (let i = 0, len = ring.length, j = len - 1; i < len; j = i++) {
-            const a = ring[i];
-            const b = ring[j];
-            if ((a.y > p.y !== b.y > p.y) &&
-                (p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x))
-                inside = !inside;
-            minDistSq = Math.min(minDistSq, distToSegmentSquared(p, a, b));
-        }
-    }
-    return (inside ? 1 : -1) * Math.sqrt(minDistSq);
-}
-// get polygon centroid
-function getCentroidCell(polygon) {
-    let area = 0;
-    let x = 0;
-    let y = 0;
-    const points = polygon[0];
-    for (let i = 0, len = points.length, j = len - 1; i < len; j = i++) {
-        const a = points[i];
-        const b = points[j];
-        const f = a.x * b.y - b.x * a.y;
-        x += (a.x + b.x) * f;
-        y += (a.y + b.y) * f;
-        area += f * 3;
-    }
-    return new Cell(x / area, y / area, 0, polygon);
-}
-
-// The radial offset is to the edge of the text box
-// In the horizontal direction, the edge of the text box is where glyphs start
-// But in the vertical direction, the glyphs appear to "start" at the baseline
-// We don't actually load baseline data, but we assume an offset of ONE_EM - 17
-// (see "yOffset" in shaping.js)
-const baselineOffset = 7;
-const INVALID_TEXT_OFFSET = Number.POSITIVE_INFINITY;
-function evaluateVariableOffset(anchor, offset) {
-    function fromRadialOffset(anchor, radialOffset) {
-        let x = 0, y = 0;
-        if (radialOffset < 0)
-            radialOffset = 0; // Ignore negative offset.
-        // solve for r where r^2 + r^2 = radialOffset^2
-        const hypotenuse = radialOffset / Math.sqrt(2);
-        switch (anchor) {
-            case 'top-right':
-            case 'top-left':
-                y = hypotenuse - baselineOffset;
-                break;
-            case 'bottom-right':
-            case 'bottom-left':
-                y = -hypotenuse + baselineOffset;
-                break;
-            case 'bottom':
-                y = -radialOffset + baselineOffset;
-                break;
-            case 'top':
-                y = radialOffset - baselineOffset;
-                break;
-        }
-        switch (anchor) {
-            case 'top-right':
-            case 'bottom-right':
-                x = -hypotenuse;
-                break;
-            case 'top-left':
-            case 'bottom-left':
-                x = hypotenuse;
-                break;
-            case 'left':
-                x = radialOffset;
-                break;
-            case 'right':
-                x = -radialOffset;
-                break;
-        }
-        return [x, y];
-    }
-    function fromTextOffset(anchor, offsetX, offsetY) {
-        let x = 0, y = 0;
-        // Use absolute offset values.
-        offsetX = Math.abs(offsetX);
-        offsetY = Math.abs(offsetY);
-        switch (anchor) {
-            case 'top-right':
-            case 'top-left':
-            case 'top':
-                y = offsetY - baselineOffset;
-                break;
-            case 'bottom-right':
-            case 'bottom-left':
-            case 'bottom':
-                y = -offsetY + baselineOffset;
-                break;
-        }
-        switch (anchor) {
-            case 'top-right':
-            case 'bottom-right':
-            case 'right':
-                x = -offsetX;
-                break;
-            case 'top-left':
-            case 'bottom-left':
-            case 'left':
-                x = offsetX;
-                break;
-        }
-        return [x, y];
-    }
-    return (offset[1] !== INVALID_TEXT_OFFSET) ? fromTextOffset(anchor, offset[0], offset[1]) : fromRadialOffset(anchor, offset[0]);
-}
-function performSymbolLayout(args) {
-    args.bucket.createArrays();
-    const tileSize = 512 * args.bucket.overscaling;
-    args.bucket.tilePixelRatio = EXTENT / tileSize;
-    args.bucket.compareText = {};
-    args.bucket.iconsNeedLinear = false;
-    const layout = args.bucket.layers[0].layout;
-    const unevaluatedLayoutValues = args.bucket.layers[0]._unevaluatedLayout._values;
-    const sizes = {
-        // Filled in below, if *SizeData.kind is 'composite'
-        // compositeIconSizes: undefined,
-        // compositeTextSizes: undefined,
-        layoutIconSize: unevaluatedLayoutValues['icon-size'].possiblyEvaluate(new EvaluationParameters(args.bucket.zoom + 1), args.canonical),
-        layoutTextSize: unevaluatedLayoutValues['text-size'].possiblyEvaluate(new EvaluationParameters(args.bucket.zoom + 1), args.canonical),
-        textMaxSize: unevaluatedLayoutValues['text-size'].possiblyEvaluate(new EvaluationParameters(18))
-    };
-    if (args.bucket.textSizeData.kind === 'composite') {
-        const { minZoom, maxZoom } = args.bucket.textSizeData;
-        sizes.compositeTextSizes = [
-            unevaluatedLayoutValues['text-size'].possiblyEvaluate(new EvaluationParameters(minZoom), args.canonical),
-            unevaluatedLayoutValues['text-size'].possiblyEvaluate(new EvaluationParameters(maxZoom), args.canonical)
-        ];
-    }
-    if (args.bucket.iconSizeData.kind === 'composite') {
-        const { minZoom, maxZoom } = args.bucket.iconSizeData;
-        sizes.compositeIconSizes = [
-            unevaluatedLayoutValues['icon-size'].possiblyEvaluate(new EvaluationParameters(minZoom), args.canonical),
-            unevaluatedLayoutValues['icon-size'].possiblyEvaluate(new EvaluationParameters(maxZoom), args.canonical)
-        ];
-    }
-    const lineHeight = layout.get('text-line-height') * ONE_EM;
-    const textAlongLine = layout.get('text-rotation-alignment') !== 'viewport' && layout.get('symbol-placement') !== 'point';
-    const keepUpright = layout.get('text-keep-upright');
-    const textSize = layout.get('text-size');
-    for (const feature of args.bucket.features) {
-        const fontstack = layout.get('text-font').evaluate(feature, {}, args.canonical).join(',');
-        const layoutTextSizeThisZoom = textSize.evaluate(feature, {}, args.canonical);
-        const layoutTextSize = sizes.layoutTextSize.evaluate(feature, {}, args.canonical);
-        const layoutIconSize = sizes.layoutIconSize.evaluate(feature, {}, args.canonical);
-        const shapedTextOrientations = {
-            horizontal: {},
-            vertical: undefined
-        };
-        const text = feature.text;
-        let textOffset = [0, 0];
-        if (text) {
-            const unformattedText = text.toString();
-            const spacing = layout.get('text-letter-spacing').evaluate(feature, {}, args.canonical) * ONE_EM;
-            const spacingIfAllowed = allowsLetterSpacing(unformattedText) ? spacing : 0;
-            const textAnchor = layout.get('text-anchor').evaluate(feature, {}, args.canonical);
-            const variableTextAnchor = layout.get('text-variable-anchor');
-            if (!variableTextAnchor) {
-                const radialOffset = layout.get('text-radial-offset').evaluate(feature, {}, args.canonical);
-                // Layers with variable anchors use the `text-radial-offset` property and the [x, y] offset vector
-                // is calculated at placement time instead of layout time
-                if (radialOffset) {
-                    // The style spec says don't use `text-offset` and `text-radial-offset` together
-                    // but doesn't actually specify what happens if you use both. We go with the radial offset.
-                    textOffset = evaluateVariableOffset(textAnchor, [radialOffset * ONE_EM, INVALID_TEXT_OFFSET]);
-                }
-                else {
-                    textOffset = layout.get('text-offset').evaluate(feature, {}, args.canonical).map(t => t * ONE_EM);
-                }
-            }
-            let textJustify = textAlongLine ?
-                'center' :
-                layout.get('text-justify').evaluate(feature, {}, args.canonical);
-            const symbolPlacement = layout.get('symbol-placement');
-            const maxWidth = symbolPlacement === 'point' ?
-                layout.get('text-max-width').evaluate(feature, {}, args.canonical) * ONE_EM :
-                0;
-            const addVerticalShapingForPointLabelIfNeeded = () => {
-                if (args.bucket.allowVerticalPlacement && allowsVerticalWritingMode(unformattedText)) {
-                    // Vertical POI label placement is meant to be used for scripts that support vertical
-                    // writing mode, thus, default left justification is used. If Latin
-                    // scripts would need to be supported, this should take into account other justifications.
-                    shapedTextOrientations.vertical = shapeText(text, args.glyphMap, args.glyphPositions, args.imagePositions, fontstack, maxWidth, lineHeight, textAnchor, 'left', spacingIfAllowed, textOffset, exports.WritingMode.vertical, true, symbolPlacement, layoutTextSize, layoutTextSizeThisZoom);
-                }
-            };
-            // If this layer uses text-variable-anchor, generate shapings for all justification possibilities.
-            if (!textAlongLine && variableTextAnchor) {
-                const justifications = textJustify === 'auto' ?
-                    variableTextAnchor.map(a => getAnchorJustification(a)) :
-                    [textJustify];
-                let singleLine = false;
-                for (let i = 0; i < justifications.length; i++) {
-                    const justification = justifications[i];
-                    if (shapedTextOrientations.horizontal[justification])
-                        continue;
-                    if (singleLine) {
-                        // If the shaping for the first justification was only a single line, we
-                        // can re-use it for the other justifications
-                        shapedTextOrientations.horizontal[justification] = shapedTextOrientations.horizontal[0];
-                    }
-                    else {
-                        // If using text-variable-anchor for the layer, we use a center anchor for all shapings and apply
-                        // the offsets for the anchor in the placement step.
-                        const shaping = shapeText(text, args.glyphMap, args.glyphPositions, args.imagePositions, fontstack, maxWidth, lineHeight, 'center', justification, spacingIfAllowed, textOffset, exports.WritingMode.horizontal, false, symbolPlacement, layoutTextSize, layoutTextSizeThisZoom);
-                        if (shaping) {
-                            shapedTextOrientations.horizontal[justification] = shaping;
-                            singleLine = shaping.positionedLines.length === 1;
-                        }
-                    }
-                }
-                addVerticalShapingForPointLabelIfNeeded();
-            }
-            else {
-                if (textJustify === 'auto') {
-                    textJustify = getAnchorJustification(textAnchor);
-                }
-                // Horizontal point or line label.
-                const shaping = shapeText(text, args.glyphMap, args.glyphPositions, args.imagePositions, fontstack, maxWidth, lineHeight, textAnchor, textJustify, spacingIfAllowed, textOffset, exports.WritingMode.horizontal, false, symbolPlacement, layoutTextSize, layoutTextSizeThisZoom);
-                if (shaping)
-                    shapedTextOrientations.horizontal[textJustify] = shaping;
-                // Vertical point label (if allowVerticalPlacement is enabled).
-                addVerticalShapingForPointLabelIfNeeded();
-                // Verticalized line label.
-                if (allowsVerticalWritingMode(unformattedText) && textAlongLine && keepUpright) {
-                    shapedTextOrientations.vertical = shapeText(text, args.glyphMap, args.glyphPositions, args.imagePositions, fontstack, maxWidth, lineHeight, textAnchor, textJustify, spacingIfAllowed, textOffset, exports.WritingMode.vertical, false, symbolPlacement, layoutTextSize, layoutTextSizeThisZoom);
-                }
-            }
-        }
-        let shapedIcon;
-        let isSDFIcon = false;
-        if (feature.icon && feature.icon.name) {
-            const image = args.imageMap[feature.icon.name];
-            if (image) {
-                shapedIcon = shapeIcon(args.imagePositions[feature.icon.name], layout.get('icon-offset').evaluate(feature, {}, args.canonical), layout.get('icon-anchor').evaluate(feature, {}, args.canonical));
-                // null/undefined SDF property treated same as default (false)
-                isSDFIcon = !!image.sdf;
-                if (args.bucket.sdfIcons === undefined) {
-                    args.bucket.sdfIcons = isSDFIcon;
-                }
-                else if (args.bucket.sdfIcons !== isSDFIcon) {
-                    warnOnce('Style sheet warning: Cannot mix SDF and non-SDF icons in one buffer');
-                }
-                if (image.pixelRatio !== args.bucket.pixelRatio) {
-                    args.bucket.iconsNeedLinear = true;
-                }
-                else if (layout.get('icon-rotate').constantOr(1) !== 0) {
-                    args.bucket.iconsNeedLinear = true;
-                }
-            }
-        }
-        const shapedText = getDefaultHorizontalShaping(shapedTextOrientations.horizontal) || shapedTextOrientations.vertical;
-        args.bucket.iconsInText = shapedText ? shapedText.iconsInText : false;
-        if (shapedText || shapedIcon) {
-            addFeature(args.bucket, feature, shapedTextOrientations, shapedIcon, args.imageMap, sizes, layoutTextSize, layoutIconSize, textOffset, isSDFIcon, args.canonical);
-        }
-    }
-    if (args.showCollisionBoxes) {
-        args.bucket.generateCollisionDebugBuffers();
-    }
-}
-// Choose the justification that matches the direction of the TextAnchor
-function getAnchorJustification(anchor) {
-    switch (anchor) {
-        case 'right':
-        case 'top-right':
-        case 'bottom-right':
-            return 'right';
-        case 'left':
-        case 'top-left':
-        case 'bottom-left':
-            return 'left';
-    }
-    return 'center';
-}
-/**
- * Given a feature and its shaped text and icon data, add a 'symbol
- * instance' for each _possible_ placement of the symbol feature.
- * (At render timePlaceSymbols#place() selects which of these instances to
- * show or hide based on collisions with symbols in other layers.)
- * @private
- */
-function addFeature(bucket, feature, shapedTextOrientations, shapedIcon, imageMap, sizes, layoutTextSize, layoutIconSize, textOffset, isSDFIcon, canonical) {
-    // To reduce the number of labels that jump around when zooming we need
-    // to use a text-size value that is the same for all zoom levels.
-    // bucket calculates text-size at a high zoom level so that all tiles can
-    // use the same value when calculating anchor positions.
-    let textMaxSize = sizes.textMaxSize.evaluate(feature, {});
-    if (textMaxSize === undefined) {
-        textMaxSize = layoutTextSize;
-    }
-    const layout = bucket.layers[0].layout;
-    const iconOffset = layout.get('icon-offset').evaluate(feature, {}, canonical);
-    const defaultHorizontalShaping = getDefaultHorizontalShaping(shapedTextOrientations.horizontal);
-    const glyphSize = 24, fontScale = layoutTextSize / glyphSize, textBoxScale = bucket.tilePixelRatio * fontScale, textMaxBoxScale = bucket.tilePixelRatio * textMaxSize / glyphSize, iconBoxScale = bucket.tilePixelRatio * layoutIconSize, symbolMinDistance = bucket.tilePixelRatio * layout.get('symbol-spacing'), textPadding = layout.get('text-padding') * bucket.tilePixelRatio, iconPadding = getIconPadding(layout, feature, canonical, bucket.tilePixelRatio), textMaxAngle = layout.get('text-max-angle') / 180 * Math.PI, textAlongLine = layout.get('text-rotation-alignment') !== 'viewport' && layout.get('symbol-placement') !== 'point', iconAlongLine = layout.get('icon-rotation-alignment') === 'map' && layout.get('symbol-placement') !== 'point', symbolPlacement = layout.get('symbol-placement'), textRepeatDistance = symbolMinDistance / 2;
-    const iconTextFit = layout.get('icon-text-fit');
-    let verticallyShapedIcon;
-    // Adjust shaped icon size when icon-text-fit is used.
-    if (shapedIcon && iconTextFit !== 'none') {
-        if (bucket.allowVerticalPlacement && shapedTextOrientations.vertical) {
-            verticallyShapedIcon = fitIconToText(shapedIcon, shapedTextOrientations.vertical, iconTextFit, layout.get('icon-text-fit-padding'), iconOffset, fontScale);
-        }
-        if (defaultHorizontalShaping) {
-            shapedIcon = fitIconToText(shapedIcon, defaultHorizontalShaping, iconTextFit, layout.get('icon-text-fit-padding'), iconOffset, fontScale);
-        }
-    }
-    const addSymbolAtAnchor = (line, anchor) => {
-        if (anchor.x < 0 || anchor.x >= EXTENT || anchor.y < 0 || anchor.y >= EXTENT) {
-            // Symbol layers are drawn across tile boundaries, We filter out symbols
-            // outside our tile boundaries (which may be included in vector tile buffers)
-            // to prevent double-drawing symbols.
-            return;
-        }
-        addSymbol(bucket, anchor, line, shapedTextOrientations, shapedIcon, imageMap, verticallyShapedIcon, bucket.layers[0], bucket.collisionBoxArray, feature.index, feature.sourceLayerIndex, bucket.index, textBoxScale, [textPadding, textPadding, textPadding, textPadding], textAlongLine, textOffset, iconBoxScale, iconPadding, iconAlongLine, iconOffset, feature, sizes, isSDFIcon, canonical, layoutTextSize);
-    };
-    if (symbolPlacement === 'line') {
-        for (const line of clipLine(feature.geometry, 0, 0, EXTENT, EXTENT)) {
-            const anchors = getAnchors(line, symbolMinDistance, textMaxAngle, shapedTextOrientations.vertical || defaultHorizontalShaping, shapedIcon, glyphSize, textMaxBoxScale, bucket.overscaling, EXTENT);
-            for (const anchor of anchors) {
-                const shapedText = defaultHorizontalShaping;
-                if (!shapedText || !anchorIsTooClose(bucket, shapedText.text, textRepeatDistance, anchor)) {
-                    addSymbolAtAnchor(line, anchor);
-                }
-            }
-        }
-    }
-    else if (symbolPlacement === 'line-center') {
-        // No clipping, multiple lines per feature are allowed
-        // "lines" with only one point are ignored as in clipLines
-        for (const line of feature.geometry) {
-            if (line.length > 1) {
-                const anchor = getCenterAnchor(line, textMaxAngle, shapedTextOrientations.vertical || defaultHorizontalShaping, shapedIcon, glyphSize, textMaxBoxScale);
-                if (anchor) {
-                    addSymbolAtAnchor(line, anchor);
-                }
-            }
-        }
-    }
-    else if (feature.type === 'Polygon') {
-        for (const polygon of classifyRings$1(feature.geometry, 0)) {
-            // 16 here represents 2 pixels
-            const poi = findPoleOfInaccessibility(polygon, 16);
-            addSymbolAtAnchor(polygon[0], new Anchor(poi.x, poi.y, 0));
-        }
-    }
-    else if (feature.type === 'LineString') {
-        // https://github.com/mapbox/mapbox-gl-js/issues/3808
-        for (const line of feature.geometry) {
-            addSymbolAtAnchor(line, new Anchor(line[0].x, line[0].y, 0));
-        }
-    }
-    else if (feature.type === 'Point') {
-        for (const points of feature.geometry) {
-            for (const point of points) {
-                addSymbolAtAnchor([point], new Anchor(point.x, point.y, 0));
-            }
-        }
-    }
-}
-const MAX_GLYPH_ICON_SIZE = 255;
-const MAX_PACKED_SIZE = MAX_GLYPH_ICON_SIZE * SIZE_PACK_FACTOR;
-function addTextVertices(bucket, anchor, shapedText, imageMap, layer, textAlongLine, feature, textOffset, lineArray, writingMode, placementTypes, placedTextSymbolIndices, placedIconIndex, sizes, canonical) {
-    const glyphQuads = getGlyphQuads(anchor, shapedText, textOffset, layer, textAlongLine, feature, imageMap, bucket.allowVerticalPlacement);
-    const sizeData = bucket.textSizeData;
-    let textSizeData = null;
-    if (sizeData.kind === 'source') {
-        textSizeData = [
-            SIZE_PACK_FACTOR * layer.layout.get('text-size').evaluate(feature, {})
-        ];
-        if (textSizeData[0] > MAX_PACKED_SIZE) {
-            warnOnce(`${bucket.layerIds[0]}: Value for "text-size" is >= ${MAX_GLYPH_ICON_SIZE}. Reduce your "text-size".`);
-        }
-    }
-    else if (sizeData.kind === 'composite') {
-        textSizeData = [
-            SIZE_PACK_FACTOR * sizes.compositeTextSizes[0].evaluate(feature, {}, canonical),
-            SIZE_PACK_FACTOR * sizes.compositeTextSizes[1].evaluate(feature, {}, canonical)
-        ];
-        if (textSizeData[0] > MAX_PACKED_SIZE || textSizeData[1] > MAX_PACKED_SIZE) {
-            warnOnce(`${bucket.layerIds[0]}: Value for "text-size" is >= ${MAX_GLYPH_ICON_SIZE}. Reduce your "text-size".`);
-        }
-    }
-    bucket.addSymbols(bucket.text, glyphQuads, textSizeData, textOffset, textAlongLine, feature, writingMode, anchor, lineArray.lineStartIndex, lineArray.lineLength, placedIconIndex, canonical);
-    // The placedSymbolArray is used at render time in drawTileSymbols
-    // These indices allow access to the array at collision detection time
-    for (const placementType of placementTypes) {
-        placedTextSymbolIndices[placementType] = bucket.text.placedSymbolArray.length - 1;
-    }
-    return glyphQuads.length * 4;
-}
-function getDefaultHorizontalShaping(horizontalShaping) {
-    // We don't care which shaping we get because this is used for collision purposes
-    // and all the justifications have the same collision box
-    for (const justification in horizontalShaping) {
-        return horizontalShaping[justification];
-    }
-    return null;
-}
-/**
- * Add a single label & icon placement.
- *
- * @private
- */
-function addSymbol(bucket, anchor, line, shapedTextOrientations, shapedIcon, imageMap, verticallyShapedIcon, layer, collisionBoxArray, featureIndex, sourceLayerIndex, bucketIndex, textBoxScale, textPadding, textAlongLine, textOffset, iconBoxScale, iconPadding, iconAlongLine, iconOffset, feature, sizes, isSDFIcon, canonical, layoutTextSize) {
-    const lineArray = bucket.addToLineVertexArray(anchor, line);
-    let textCollisionFeature, iconCollisionFeature, verticalTextCollisionFeature, verticalIconCollisionFeature;
-    let numIconVertices = 0;
-    let numVerticalIconVertices = 0;
-    let numHorizontalGlyphVertices = 0;
-    let numVerticalGlyphVertices = 0;
-    let placedIconSymbolIndex = -1;
-    let verticalPlacedIconSymbolIndex = -1;
-    const placedTextSymbolIndices = {};
-    let key = murmurhashJsExports('');
-    let textOffset0 = 0;
-    let textOffset1 = 0;
-    if (layer._unevaluatedLayout.getValue('text-radial-offset') === undefined) {
-        [textOffset0, textOffset1] = layer.layout.get('text-offset').evaluate(feature, {}, canonical).map(t => t * ONE_EM);
-    }
-    else {
-        textOffset0 = layer.layout.get('text-radial-offset').evaluate(feature, {}, canonical) * ONE_EM;
-        textOffset1 = INVALID_TEXT_OFFSET;
-    }
-    if (bucket.allowVerticalPlacement && shapedTextOrientations.vertical) {
-        const textRotation = layer.layout.get('text-rotate').evaluate(feature, {}, canonical);
-        const verticalTextRotation = textRotation + 90.0;
-        const verticalShaping = shapedTextOrientations.vertical;
-        verticalTextCollisionFeature = new CollisionFeature(collisionBoxArray, anchor, featureIndex, sourceLayerIndex, bucketIndex, verticalShaping, textBoxScale, textPadding, textAlongLine, verticalTextRotation);
-        if (verticallyShapedIcon) {
-            verticalIconCollisionFeature = new CollisionFeature(collisionBoxArray, anchor, featureIndex, sourceLayerIndex, bucketIndex, verticallyShapedIcon, iconBoxScale, iconPadding, textAlongLine, verticalTextRotation);
-        }
-    }
-    //Place icon first, so text can have a reference to its index in the placed symbol array.
-    //Text symbols can lazily shift at render-time because of variable anchor placement.
-    //If the style specifies an `icon-text-fit` then the icon would have to shift along with it.
-    // For more info check `updateVariableAnchors` in `draw_symbol.js` .
-    if (shapedIcon) {
-        const iconRotate = layer.layout.get('icon-rotate').evaluate(feature, {});
-        const hasIconTextFit = layer.layout.get('icon-text-fit') !== 'none';
-        const iconQuads = getIconQuads(shapedIcon, iconRotate, isSDFIcon, hasIconTextFit);
-        const verticalIconQuads = verticallyShapedIcon ? getIconQuads(verticallyShapedIcon, iconRotate, isSDFIcon, hasIconTextFit) : undefined;
-        iconCollisionFeature = new CollisionFeature(collisionBoxArray, anchor, featureIndex, sourceLayerIndex, bucketIndex, shapedIcon, iconBoxScale, iconPadding, /*align boxes to line*/ false, iconRotate);
-        numIconVertices = iconQuads.length * 4;
-        const sizeData = bucket.iconSizeData;
-        let iconSizeData = null;
-        if (sizeData.kind === 'source') {
-            iconSizeData = [
-                SIZE_PACK_FACTOR * layer.layout.get('icon-size').evaluate(feature, {})
-            ];
-            if (iconSizeData[0] > MAX_PACKED_SIZE) {
-                warnOnce(`${bucket.layerIds[0]}: Value for "icon-size" is >= ${MAX_GLYPH_ICON_SIZE}. Reduce your "icon-size".`);
-            }
-        }
-        else if (sizeData.kind === 'composite') {
-            iconSizeData = [
-                SIZE_PACK_FACTOR * sizes.compositeIconSizes[0].evaluate(feature, {}, canonical),
-                SIZE_PACK_FACTOR * sizes.compositeIconSizes[1].evaluate(feature, {}, canonical)
-            ];
-            if (iconSizeData[0] > MAX_PACKED_SIZE || iconSizeData[1] > MAX_PACKED_SIZE) {
-                warnOnce(`${bucket.layerIds[0]}: Value for "icon-size" is >= ${MAX_GLYPH_ICON_SIZE}. Reduce your "icon-size".`);
-            }
-        }
-        bucket.addSymbols(bucket.icon, iconQuads, iconSizeData, iconOffset, iconAlongLine, feature, exports.WritingMode.none, anchor, lineArray.lineStartIndex, lineArray.lineLength, 
-        // The icon itself does not have an associated symbol since the text isnt placed yet
-        -1, canonical);
-        placedIconSymbolIndex = bucket.icon.placedSymbolArray.length - 1;
-        if (verticalIconQuads) {
-            numVerticalIconVertices = verticalIconQuads.length * 4;
-            bucket.addSymbols(bucket.icon, verticalIconQuads, iconSizeData, iconOffset, iconAlongLine, feature, exports.WritingMode.vertical, anchor, lineArray.lineStartIndex, lineArray.lineLength, 
-            // The icon itself does not have an associated symbol since the text isnt placed yet
-            -1, canonical);
-            verticalPlacedIconSymbolIndex = bucket.icon.placedSymbolArray.length - 1;
-        }
-    }
-    const justifications = Object.keys(shapedTextOrientations.horizontal);
-    for (const justification of justifications) {
-        const shaping = shapedTextOrientations.horizontal[justification];
-        if (!textCollisionFeature) {
-            key = murmurhashJsExports(shaping.text);
-            const textRotate = layer.layout.get('text-rotate').evaluate(feature, {}, canonical);
-            // As a collision approximation, we can use either the vertical or any of the horizontal versions of the feature
-            // We're counting on all versions having similar dimensions
-            textCollisionFeature = new CollisionFeature(collisionBoxArray, anchor, featureIndex, sourceLayerIndex, bucketIndex, shaping, textBoxScale, textPadding, textAlongLine, textRotate);
-        }
-        const singleLine = shaping.positionedLines.length === 1;
-        numHorizontalGlyphVertices += addTextVertices(bucket, anchor, shaping, imageMap, layer, textAlongLine, feature, textOffset, lineArray, shapedTextOrientations.vertical ? exports.WritingMode.horizontal : exports.WritingMode.horizontalOnly, singleLine ? justifications : [justification], placedTextSymbolIndices, placedIconSymbolIndex, sizes, canonical);
-        if (singleLine) {
-            break;
-        }
-    }
-    if (shapedTextOrientations.vertical) {
-        numVerticalGlyphVertices += addTextVertices(bucket, anchor, shapedTextOrientations.vertical, imageMap, layer, textAlongLine, feature, textOffset, lineArray, exports.WritingMode.vertical, ['vertical'], placedTextSymbolIndices, verticalPlacedIconSymbolIndex, sizes, canonical);
-    }
-    const textBoxStartIndex = textCollisionFeature ? textCollisionFeature.boxStartIndex : bucket.collisionBoxArray.length;
-    const textBoxEndIndex = textCollisionFeature ? textCollisionFeature.boxEndIndex : bucket.collisionBoxArray.length;
-    const verticalTextBoxStartIndex = verticalTextCollisionFeature ? verticalTextCollisionFeature.boxStartIndex : bucket.collisionBoxArray.length;
-    const verticalTextBoxEndIndex = verticalTextCollisionFeature ? verticalTextCollisionFeature.boxEndIndex : bucket.collisionBoxArray.length;
-    const iconBoxStartIndex = iconCollisionFeature ? iconCollisionFeature.boxStartIndex : bucket.collisionBoxArray.length;
-    const iconBoxEndIndex = iconCollisionFeature ? iconCollisionFeature.boxEndIndex : bucket.collisionBoxArray.length;
-    const verticalIconBoxStartIndex = verticalIconCollisionFeature ? verticalIconCollisionFeature.boxStartIndex : bucket.collisionBoxArray.length;
-    const verticalIconBoxEndIndex = verticalIconCollisionFeature ? verticalIconCollisionFeature.boxEndIndex : bucket.collisionBoxArray.length;
-    // Check if runtime collision circles should be used for any of the collision features.
-    // It is enough to choose the tallest feature shape as circles are always placed on a line.
-    // All measurements are in glyph metrics and later converted into pixels using proper font size "layoutTextSize"
-    let collisionCircleDiameter = -1;
-    const getCollisionCircleHeight = (feature, prevHeight) => {
-        if (feature && feature.circleDiameter)
-            return Math.max(feature.circleDiameter, prevHeight);
-        return prevHeight;
-    };
-    collisionCircleDiameter = getCollisionCircleHeight(textCollisionFeature, collisionCircleDiameter);
-    collisionCircleDiameter = getCollisionCircleHeight(verticalTextCollisionFeature, collisionCircleDiameter);
-    collisionCircleDiameter = getCollisionCircleHeight(iconCollisionFeature, collisionCircleDiameter);
-    collisionCircleDiameter = getCollisionCircleHeight(verticalIconCollisionFeature, collisionCircleDiameter);
-    const useRuntimeCollisionCircles = (collisionCircleDiameter > -1) ? 1 : 0;
-    // Convert circle collision height into pixels
-    if (useRuntimeCollisionCircles)
-        collisionCircleDiameter *= layoutTextSize / ONE_EM;
-    if (bucket.glyphOffsetArray.length >= SymbolBucket$1.MAX_GLYPHS)
-        warnOnce('Too many glyphs being rendered in a tile. See https://github.com/mapbox/mapbox-gl-js/issues/2907');
-    if (feature.sortKey !== undefined) {
-        bucket.addToSortKeyRanges(bucket.symbolInstances.length, feature.sortKey);
-    }
-    bucket.symbolInstances.emplaceBack(anchor.x, anchor.y, placedTextSymbolIndices.right >= 0 ? placedTextSymbolIndices.right : -1, placedTextSymbolIndices.center >= 0 ? placedTextSymbolIndices.center : -1, placedTextSymbolIndices.left >= 0 ? placedTextSymbolIndices.left : -1, placedTextSymbolIndices.vertical || -1, placedIconSymbolIndex, verticalPlacedIconSymbolIndex, key, textBoxStartIndex, textBoxEndIndex, verticalTextBoxStartIndex, verticalTextBoxEndIndex, iconBoxStartIndex, iconBoxEndIndex, verticalIconBoxStartIndex, verticalIconBoxEndIndex, featureIndex, numHorizontalGlyphVertices, numVerticalGlyphVertices, numIconVertices, numVerticalIconVertices, useRuntimeCollisionCircles, 0, textBoxScale, textOffset0, textOffset1, collisionCircleDiameter);
-}
-function anchorIsTooClose(bucket, text, repeatDistance, anchor) {
-    const compareText = bucket.compareText;
-    if (!(text in compareText)) {
-        compareText[text] = [];
-    }
-    else {
-        const otherAnchors = compareText[text];
-        for (let k = otherAnchors.length - 1; k >= 0; k--) {
-            if (anchor.dist(otherAnchors[k]) < repeatDistance) {
-                // If it's within repeatDistance of one anchor, stop looking
-                return true;
-            }
-        }
-    }
-    // If anchor is not within repeatDistance of any other anchor, add to array
-    compareText[text].push(anchor);
-    return false;
+    return result;
 }
 
 const vectorTileFeatureTypes = vectorTile.VectorTileFeature.types;
@@ -27655,10 +27878,10 @@ class SymbolBucket {
         const collisionVertexArray = arrays.collisionVertexArray;
         const anchorX = symbolInstance.anchorX;
         const anchorY = symbolInstance.anchorY;
-        this._addCollisionDebugVertex(layoutVertexArray, collisionVertexArray, boxAnchorPoint, anchorX, anchorY, new pointGeometry(x1, y1));
-        this._addCollisionDebugVertex(layoutVertexArray, collisionVertexArray, boxAnchorPoint, anchorX, anchorY, new pointGeometry(x2, y1));
-        this._addCollisionDebugVertex(layoutVertexArray, collisionVertexArray, boxAnchorPoint, anchorX, anchorY, new pointGeometry(x2, y2));
-        this._addCollisionDebugVertex(layoutVertexArray, collisionVertexArray, boxAnchorPoint, anchorX, anchorY, new pointGeometry(x1, y2));
+        this._addCollisionDebugVertex(layoutVertexArray, collisionVertexArray, boxAnchorPoint, anchorX, anchorY, new Point$2(x1, y1));
+        this._addCollisionDebugVertex(layoutVertexArray, collisionVertexArray, boxAnchorPoint, anchorX, anchorY, new Point$2(x2, y1));
+        this._addCollisionDebugVertex(layoutVertexArray, collisionVertexArray, boxAnchorPoint, anchorX, anchorY, new Point$2(x2, y2));
+        this._addCollisionDebugVertex(layoutVertexArray, collisionVertexArray, boxAnchorPoint, anchorX, anchorY, new Point$2(x1, y2));
         segment.vertexLength += 4;
         const indexArray = arrays.indexArray;
         indexArray.emplaceBack(index, index + 1);
@@ -27847,7 +28070,6 @@ register('SymbolBucket', SymbolBucket, {
 // but we expect there to be many fewer boxes/lines than glyphs
 SymbolBucket.MAX_GLYPHS = 65535;
 SymbolBucket.addDynamicAttributes = addDynamicAttributes;
-var SymbolBucket$1 = SymbolBucket;
 
 /**
  * Replace tokens in a string template with values in an object
@@ -27865,65 +28087,65 @@ function resolveTokens(properties, text) {
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
 const layout = new Properties({
-    "symbol-placement": new DataConstantProperty(spec["layout_symbol"]["symbol-placement"]),
-    "symbol-spacing": new DataConstantProperty(spec["layout_symbol"]["symbol-spacing"]),
-    "symbol-avoid-edges": new DataConstantProperty(spec["layout_symbol"]["symbol-avoid-edges"]),
-    "symbol-sort-key": new DataDrivenProperty(spec["layout_symbol"]["symbol-sort-key"]),
-    "symbol-z-order": new DataConstantProperty(spec["layout_symbol"]["symbol-z-order"]),
-    "icon-allow-overlap": new DataConstantProperty(spec["layout_symbol"]["icon-allow-overlap"]),
-    "icon-overlap": new DataConstantProperty(spec["layout_symbol"]["icon-overlap"]),
-    "icon-ignore-placement": new DataConstantProperty(spec["layout_symbol"]["icon-ignore-placement"]),
-    "icon-optional": new DataConstantProperty(spec["layout_symbol"]["icon-optional"]),
-    "icon-rotation-alignment": new DataConstantProperty(spec["layout_symbol"]["icon-rotation-alignment"]),
-    "icon-size": new DataDrivenProperty(spec["layout_symbol"]["icon-size"]),
-    "icon-text-fit": new DataConstantProperty(spec["layout_symbol"]["icon-text-fit"]),
-    "icon-text-fit-padding": new DataConstantProperty(spec["layout_symbol"]["icon-text-fit-padding"]),
-    "icon-image": new DataDrivenProperty(spec["layout_symbol"]["icon-image"]),
-    "icon-rotate": new DataDrivenProperty(spec["layout_symbol"]["icon-rotate"]),
-    "icon-padding": new DataDrivenProperty(spec["layout_symbol"]["icon-padding"]),
-    "icon-keep-upright": new DataConstantProperty(spec["layout_symbol"]["icon-keep-upright"]),
-    "icon-offset": new DataDrivenProperty(spec["layout_symbol"]["icon-offset"]),
-    "icon-anchor": new DataDrivenProperty(spec["layout_symbol"]["icon-anchor"]),
-    "icon-pitch-alignment": new DataConstantProperty(spec["layout_symbol"]["icon-pitch-alignment"]),
-    "text-pitch-alignment": new DataConstantProperty(spec["layout_symbol"]["text-pitch-alignment"]),
-    "text-rotation-alignment": new DataConstantProperty(spec["layout_symbol"]["text-rotation-alignment"]),
-    "text-field": new DataDrivenProperty(spec["layout_symbol"]["text-field"]),
-    "text-font": new DataDrivenProperty(spec["layout_symbol"]["text-font"]),
-    "text-size": new DataDrivenProperty(spec["layout_symbol"]["text-size"]),
-    "text-max-width": new DataDrivenProperty(spec["layout_symbol"]["text-max-width"]),
-    "text-line-height": new DataConstantProperty(spec["layout_symbol"]["text-line-height"]),
-    "text-letter-spacing": new DataDrivenProperty(spec["layout_symbol"]["text-letter-spacing"]),
-    "text-justify": new DataDrivenProperty(spec["layout_symbol"]["text-justify"]),
-    "text-radial-offset": new DataDrivenProperty(spec["layout_symbol"]["text-radial-offset"]),
-    "text-variable-anchor": new DataConstantProperty(spec["layout_symbol"]["text-variable-anchor"]),
-    "text-anchor": new DataDrivenProperty(spec["layout_symbol"]["text-anchor"]),
-    "text-max-angle": new DataConstantProperty(spec["layout_symbol"]["text-max-angle"]),
-    "text-writing-mode": new DataConstantProperty(spec["layout_symbol"]["text-writing-mode"]),
-    "text-rotate": new DataDrivenProperty(spec["layout_symbol"]["text-rotate"]),
-    "text-padding": new DataConstantProperty(spec["layout_symbol"]["text-padding"]),
-    "text-keep-upright": new DataConstantProperty(spec["layout_symbol"]["text-keep-upright"]),
-    "text-transform": new DataDrivenProperty(spec["layout_symbol"]["text-transform"]),
-    "text-offset": new DataDrivenProperty(spec["layout_symbol"]["text-offset"]),
-    "text-allow-overlap": new DataConstantProperty(spec["layout_symbol"]["text-allow-overlap"]),
-    "text-overlap": new DataConstantProperty(spec["layout_symbol"]["text-overlap"]),
-    "text-ignore-placement": new DataConstantProperty(spec["layout_symbol"]["text-ignore-placement"]),
-    "text-optional": new DataConstantProperty(spec["layout_symbol"]["text-optional"]),
+    "symbol-placement": new DataConstantProperty(v8Spec["layout_symbol"]["symbol-placement"]),
+    "symbol-spacing": new DataConstantProperty(v8Spec["layout_symbol"]["symbol-spacing"]),
+    "symbol-avoid-edges": new DataConstantProperty(v8Spec["layout_symbol"]["symbol-avoid-edges"]),
+    "symbol-sort-key": new DataDrivenProperty(v8Spec["layout_symbol"]["symbol-sort-key"]),
+    "symbol-z-order": new DataConstantProperty(v8Spec["layout_symbol"]["symbol-z-order"]),
+    "icon-allow-overlap": new DataConstantProperty(v8Spec["layout_symbol"]["icon-allow-overlap"]),
+    "icon-overlap": new DataConstantProperty(v8Spec["layout_symbol"]["icon-overlap"]),
+    "icon-ignore-placement": new DataConstantProperty(v8Spec["layout_symbol"]["icon-ignore-placement"]),
+    "icon-optional": new DataConstantProperty(v8Spec["layout_symbol"]["icon-optional"]),
+    "icon-rotation-alignment": new DataConstantProperty(v8Spec["layout_symbol"]["icon-rotation-alignment"]),
+    "icon-size": new DataDrivenProperty(v8Spec["layout_symbol"]["icon-size"]),
+    "icon-text-fit": new DataConstantProperty(v8Spec["layout_symbol"]["icon-text-fit"]),
+    "icon-text-fit-padding": new DataConstantProperty(v8Spec["layout_symbol"]["icon-text-fit-padding"]),
+    "icon-image": new DataDrivenProperty(v8Spec["layout_symbol"]["icon-image"]),
+    "icon-rotate": new DataDrivenProperty(v8Spec["layout_symbol"]["icon-rotate"]),
+    "icon-padding": new DataDrivenProperty(v8Spec["layout_symbol"]["icon-padding"]),
+    "icon-keep-upright": new DataConstantProperty(v8Spec["layout_symbol"]["icon-keep-upright"]),
+    "icon-offset": new DataDrivenProperty(v8Spec["layout_symbol"]["icon-offset"]),
+    "icon-anchor": new DataDrivenProperty(v8Spec["layout_symbol"]["icon-anchor"]),
+    "icon-pitch-alignment": new DataConstantProperty(v8Spec["layout_symbol"]["icon-pitch-alignment"]),
+    "text-pitch-alignment": new DataConstantProperty(v8Spec["layout_symbol"]["text-pitch-alignment"]),
+    "text-rotation-alignment": new DataConstantProperty(v8Spec["layout_symbol"]["text-rotation-alignment"]),
+    "text-field": new DataDrivenProperty(v8Spec["layout_symbol"]["text-field"]),
+    "text-font": new DataDrivenProperty(v8Spec["layout_symbol"]["text-font"]),
+    "text-size": new DataDrivenProperty(v8Spec["layout_symbol"]["text-size"]),
+    "text-max-width": new DataDrivenProperty(v8Spec["layout_symbol"]["text-max-width"]),
+    "text-line-height": new DataConstantProperty(v8Spec["layout_symbol"]["text-line-height"]),
+    "text-letter-spacing": new DataDrivenProperty(v8Spec["layout_symbol"]["text-letter-spacing"]),
+    "text-justify": new DataDrivenProperty(v8Spec["layout_symbol"]["text-justify"]),
+    "text-radial-offset": new DataDrivenProperty(v8Spec["layout_symbol"]["text-radial-offset"]),
+    "text-variable-anchor": new DataConstantProperty(v8Spec["layout_symbol"]["text-variable-anchor"]),
+    "text-anchor": new DataDrivenProperty(v8Spec["layout_symbol"]["text-anchor"]),
+    "text-max-angle": new DataConstantProperty(v8Spec["layout_symbol"]["text-max-angle"]),
+    "text-writing-mode": new DataConstantProperty(v8Spec["layout_symbol"]["text-writing-mode"]),
+    "text-rotate": new DataDrivenProperty(v8Spec["layout_symbol"]["text-rotate"]),
+    "text-padding": new DataConstantProperty(v8Spec["layout_symbol"]["text-padding"]),
+    "text-keep-upright": new DataConstantProperty(v8Spec["layout_symbol"]["text-keep-upright"]),
+    "text-transform": new DataDrivenProperty(v8Spec["layout_symbol"]["text-transform"]),
+    "text-offset": new DataDrivenProperty(v8Spec["layout_symbol"]["text-offset"]),
+    "text-allow-overlap": new DataConstantProperty(v8Spec["layout_symbol"]["text-allow-overlap"]),
+    "text-overlap": new DataConstantProperty(v8Spec["layout_symbol"]["text-overlap"]),
+    "text-ignore-placement": new DataConstantProperty(v8Spec["layout_symbol"]["text-ignore-placement"]),
+    "text-optional": new DataConstantProperty(v8Spec["layout_symbol"]["text-optional"]),
 });
 const paint$2 = new Properties({
-    "icon-opacity": new DataDrivenProperty(spec["paint_symbol"]["icon-opacity"]),
-    "icon-color": new DataDrivenProperty(spec["paint_symbol"]["icon-color"]),
-    "icon-halo-color": new DataDrivenProperty(spec["paint_symbol"]["icon-halo-color"]),
-    "icon-halo-width": new DataDrivenProperty(spec["paint_symbol"]["icon-halo-width"]),
-    "icon-halo-blur": new DataDrivenProperty(spec["paint_symbol"]["icon-halo-blur"]),
-    "icon-translate": new DataConstantProperty(spec["paint_symbol"]["icon-translate"]),
-    "icon-translate-anchor": new DataConstantProperty(spec["paint_symbol"]["icon-translate-anchor"]),
-    "text-opacity": new DataDrivenProperty(spec["paint_symbol"]["text-opacity"]),
-    "text-color": new DataDrivenProperty(spec["paint_symbol"]["text-color"], { runtimeType: ColorType, getOverride: (o) => o.textColor, hasOverride: (o) => !!o.textColor }),
-    "text-halo-color": new DataDrivenProperty(spec["paint_symbol"]["text-halo-color"]),
-    "text-halo-width": new DataDrivenProperty(spec["paint_symbol"]["text-halo-width"]),
-    "text-halo-blur": new DataDrivenProperty(spec["paint_symbol"]["text-halo-blur"]),
-    "text-translate": new DataConstantProperty(spec["paint_symbol"]["text-translate"]),
-    "text-translate-anchor": new DataConstantProperty(spec["paint_symbol"]["text-translate-anchor"]),
+    "icon-opacity": new DataDrivenProperty(v8Spec["paint_symbol"]["icon-opacity"]),
+    "icon-color": new DataDrivenProperty(v8Spec["paint_symbol"]["icon-color"]),
+    "icon-halo-color": new DataDrivenProperty(v8Spec["paint_symbol"]["icon-halo-color"]),
+    "icon-halo-width": new DataDrivenProperty(v8Spec["paint_symbol"]["icon-halo-width"]),
+    "icon-halo-blur": new DataDrivenProperty(v8Spec["paint_symbol"]["icon-halo-blur"]),
+    "icon-translate": new DataConstantProperty(v8Spec["paint_symbol"]["icon-translate"]),
+    "icon-translate-anchor": new DataConstantProperty(v8Spec["paint_symbol"]["icon-translate-anchor"]),
+    "text-opacity": new DataDrivenProperty(v8Spec["paint_symbol"]["text-opacity"]),
+    "text-color": new DataDrivenProperty(v8Spec["paint_symbol"]["text-color"], { runtimeType: ColorType, getOverride: (o) => o.textColor, hasOverride: (o) => !!o.textColor }),
+    "text-halo-color": new DataDrivenProperty(v8Spec["paint_symbol"]["text-halo-color"]),
+    "text-halo-width": new DataDrivenProperty(v8Spec["paint_symbol"]["text-halo-width"]),
+    "text-halo-blur": new DataDrivenProperty(v8Spec["paint_symbol"]["text-halo-blur"]),
+    "text-translate": new DataConstantProperty(v8Spec["paint_symbol"]["text-translate"]),
+    "text-translate-anchor": new DataConstantProperty(v8Spec["paint_symbol"]["text-translate-anchor"]),
 });
 var properties$2 = { paint: paint$2, layout };
 
@@ -28019,7 +28241,7 @@ class SymbolStyleLayer extends StyleLayer {
         return value;
     }
     createBucket(parameters) {
-        return new SymbolBucket$1(parameters);
+        return new SymbolBucket(parameters);
     }
     queryRadius() {
         return 0;
@@ -28089,19 +28311,6 @@ class SymbolStyleLayer extends StyleLayer {
         return hasOverrides;
     }
 }
-function getOverlapMode(layout, overlapProp, allowOverlapProp) {
-    let result = 'never';
-    const overlap = layout.get(overlapProp);
-    if (overlap) {
-        // if -overlap is set, use it
-        result = overlap;
-    }
-    else if (layout.get(allowOverlapProp)) {
-        // fall back to -allow-overlap, with false='never', true='always'
-        result = 'always';
-    }
-    return result;
-}
 function getIconPadding(layout, feature, canonical, pixelRatio = 1) {
     // Support text-padding in addition to icon-padding? Unclear how to apply asymmetric text-padding to the radius for collision circles.
     const result = layout.get('icon-padding').evaluate(feature, {}, canonical);
@@ -28116,9 +28325,9 @@ function getIconPadding(layout, feature, canonical, pixelRatio = 1) {
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
 const paint$1 = new Properties({
-    "background-color": new DataConstantProperty(spec["paint_background"]["background-color"]),
-    "background-pattern": new CrossFadedProperty(spec["paint_background"]["background-pattern"]),
-    "background-opacity": new DataConstantProperty(spec["paint_background"]["background-opacity"]),
+    "background-color": new DataConstantProperty(v8Spec["paint_background"]["background-color"]),
+    "background-pattern": new CrossFadedProperty(v8Spec["paint_background"]["background-pattern"]),
+    "background-opacity": new DataConstantProperty(v8Spec["paint_background"]["background-opacity"]),
 });
 var properties$1 = { paint: paint$1 };
 
@@ -28130,14 +28339,14 @@ class BackgroundStyleLayer extends StyleLayer {
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
 const paint = new Properties({
-    "raster-opacity": new DataConstantProperty(spec["paint_raster"]["raster-opacity"]),
-    "raster-hue-rotate": new DataConstantProperty(spec["paint_raster"]["raster-hue-rotate"]),
-    "raster-brightness-min": new DataConstantProperty(spec["paint_raster"]["raster-brightness-min"]),
-    "raster-brightness-max": new DataConstantProperty(spec["paint_raster"]["raster-brightness-max"]),
-    "raster-saturation": new DataConstantProperty(spec["paint_raster"]["raster-saturation"]),
-    "raster-contrast": new DataConstantProperty(spec["paint_raster"]["raster-contrast"]),
-    "raster-resampling": new DataConstantProperty(spec["paint_raster"]["raster-resampling"]),
-    "raster-fade-duration": new DataConstantProperty(spec["paint_raster"]["raster-fade-duration"]),
+    "raster-opacity": new DataConstantProperty(v8Spec["paint_raster"]["raster-opacity"]),
+    "raster-hue-rotate": new DataConstantProperty(v8Spec["paint_raster"]["raster-hue-rotate"]),
+    "raster-brightness-min": new DataConstantProperty(v8Spec["paint_raster"]["raster-brightness-min"]),
+    "raster-brightness-max": new DataConstantProperty(v8Spec["paint_raster"]["raster-brightness-max"]),
+    "raster-saturation": new DataConstantProperty(v8Spec["paint_raster"]["raster-saturation"]),
+    "raster-contrast": new DataConstantProperty(v8Spec["paint_raster"]["raster-contrast"]),
+    "raster-resampling": new DataConstantProperty(v8Spec["paint_raster"]["raster-resampling"]),
+    "raster-fade-duration": new DataConstantProperty(v8Spec["paint_raster"]["raster-fade-duration"]),
 });
 var properties = { paint };
 
@@ -28492,7 +28701,7 @@ class LngLat {
     /**
      * Returns the coordinates represented as an array of two numbers.
      *
-     * @returns {Array<number>} The coordinates represeted as an array of longitude and latitude.
+     * @returns {[number,number]} The coordinates represented as an array of longitude and latitude.
      * @example
      * var ll = new maplibregl.LngLat(-73.9749, 40.7736);
      * ll.toArray(); // = [-73.9749, 40.7736]
@@ -28531,20 +28740,6 @@ class LngLat {
         return maxMeters;
     }
     /**
-     * Returns a `LngLatBounds` from the coordinates extended by a given `radius`. The returned `LngLatBounds` completely contains the `radius`.
-     *
-     * @param {number} [radius=0] Distance in meters from the coordinates to extend the bounds.
-     * @returns {LngLatBounds} A new `LngLatBounds` object representing the coordinates extended by the `radius`.
-     * @example
-     * var ll = new maplibregl.LngLat(-73.9749, 40.7736);
-     * ll.toBounds(100).toArray(); // = [[-73.97501862141328, 40.77351016847229], [-73.97478137858673, 40.77368983152771]]
-     */
-    toBounds(radius = 0) {
-        const earthCircumferenceInMetersAtEquator = 40075017;
-        const latAccuracy = 360 * radius / earthCircumferenceInMetersAtEquator, lngAccuracy = latAccuracy / Math.cos((Math.PI / 180) * this.lat);
-        return new LngLatBounds$1(new LngLat(this.lng - lngAccuracy, this.lat - latAccuracy), new LngLat(this.lng + lngAccuracy, this.lat + latAccuracy));
-    }
-    /**
      * Converts an array of two numbers or an object with `lng` and `lat` or `lon` and `lat` properties
      * to a `LngLat` object.
      *
@@ -28572,242 +28767,6 @@ class LngLat {
         throw new Error('`LngLatLike` argument must be specified as a LngLat instance, an object {lng: <lng>, lat: <lat>}, an object {lon: <lng>, lat: <lat>}, or an array of [<lng>, <lat>]');
     }
 }
-
-/**
- * A `LngLatBounds` object represents a geographical bounding box,
- * defined by its southwest and northeast points in longitude and latitude.
- *
- * If no arguments are provided to the constructor, a `null` bounding box is created.
- *
- * Note that any Mapbox GL method that accepts a `LngLatBounds` object as an argument or option
- * can also accept an `Array` of two {@link LngLatLike} constructs and will perform an implicit conversion.
- * This flexible type is documented as {@link LngLatBoundsLike}.
- *
- * @param {LngLatLike} [sw] The southwest corner of the bounding box.
- * @param {LngLatLike} [ne] The northeast corner of the bounding box.
- * @example
- * var sw = new maplibregl.LngLat(-73.9876, 40.7661);
- * var ne = new maplibregl.LngLat(-73.9397, 40.8002);
- * var llb = new maplibregl.LngLatBounds(sw, ne);
- */
-class LngLatBounds {
-    // This constructor is too flexible to type. It should not be so flexible.
-    constructor(sw, ne) {
-        if (!sw) {
-            // noop
-        }
-        else if (ne) {
-            this.setSouthWest(sw).setNorthEast(ne);
-        }
-        else if (sw.length === 4) {
-            this.setSouthWest([sw[0], sw[1]]).setNorthEast([sw[2], sw[3]]);
-        }
-        else {
-            this.setSouthWest(sw[0]).setNorthEast(sw[1]);
-        }
-    }
-    /**
-     * Set the northeast corner of the bounding box
-     *
-     * @param {LngLatLike} ne a {@link LngLatLike} object describing the northeast corner of the bounding box.
-     * @returns {LngLatBounds} `this`
-     */
-    setNorthEast(ne) {
-        this._ne = ne instanceof LngLat ? new LngLat(ne.lng, ne.lat) : LngLat.convert(ne);
-        return this;
-    }
-    /**
-     * Set the southwest corner of the bounding box
-     *
-     * @param {LngLatLike} sw a {@link LngLatLike} object describing the southwest corner of the bounding box.
-     * @returns {LngLatBounds} `this`
-     */
-    setSouthWest(sw) {
-        this._sw = sw instanceof LngLat ? new LngLat(sw.lng, sw.lat) : LngLat.convert(sw);
-        return this;
-    }
-    /**
-     * Extend the bounds to include a given LngLatLike or LngLatBoundsLike.
-     *
-     * @param {LngLatLike|LngLatBoundsLike} obj object to extend to
-     * @returns {LngLatBounds} `this`
-     */
-    extend(obj) {
-        const sw = this._sw, ne = this._ne;
-        let sw2, ne2;
-        if (obj instanceof LngLat) {
-            sw2 = obj;
-            ne2 = obj;
-        }
-        else if (obj instanceof LngLatBounds) {
-            sw2 = obj._sw;
-            ne2 = obj._ne;
-            if (!sw2 || !ne2)
-                return this;
-        }
-        else {
-            if (Array.isArray(obj)) {
-                if (obj.length === 4 || obj.every(Array.isArray)) {
-                    const lngLatBoundsObj = obj;
-                    return this.extend(LngLatBounds.convert(lngLatBoundsObj));
-                }
-                else {
-                    const lngLatObj = obj;
-                    return this.extend(LngLat.convert(lngLatObj));
-                }
-            }
-            return this;
-        }
-        if (!sw && !ne) {
-            this._sw = new LngLat(sw2.lng, sw2.lat);
-            this._ne = new LngLat(ne2.lng, ne2.lat);
-        }
-        else {
-            sw.lng = Math.min(sw2.lng, sw.lng);
-            sw.lat = Math.min(sw2.lat, sw.lat);
-            ne.lng = Math.max(ne2.lng, ne.lng);
-            ne.lat = Math.max(ne2.lat, ne.lat);
-        }
-        return this;
-    }
-    /**
-     * Returns the geographical coordinate equidistant from the bounding box's corners.
-     *
-     * @returns {LngLat} The bounding box's center.
-     * @example
-     * var llb = new maplibregl.LngLatBounds([-73.9876, 40.7661], [-73.9397, 40.8002]);
-     * llb.getCenter(); // = LngLat {lng: -73.96365, lat: 40.78315}
-     */
-    getCenter() {
-        return new LngLat((this._sw.lng + this._ne.lng) / 2, (this._sw.lat + this._ne.lat) / 2);
-    }
-    /**
-     * Returns the southwest corner of the bounding box.
-     *
-     * @returns {LngLat} The southwest corner of the bounding box.
-     */
-    getSouthWest() { return this._sw; }
-    /**
-     * Returns the northeast corner of the bounding box.
-     *
-     * @returns {LngLat} The northeast corner of the bounding box.
-     */
-    getNorthEast() { return this._ne; }
-    /**
-     * Returns the northwest corner of the bounding box.
-     *
-     * @returns {LngLat} The northwest corner of the bounding box.
-     */
-    getNorthWest() { return new LngLat(this.getWest(), this.getNorth()); }
-    /**
-     * Returns the southeast corner of the bounding box.
-     *
-     * @returns {LngLat} The southeast corner of the bounding box.
-     */
-    getSouthEast() { return new LngLat(this.getEast(), this.getSouth()); }
-    /**
-     * Returns the west edge of the bounding box.
-     *
-     * @returns {number} The west edge of the bounding box.
-     */
-    getWest() { return this._sw.lng; }
-    /**
-     * Returns the south edge of the bounding box.
-     *
-     * @returns {number} The south edge of the bounding box.
-     */
-    getSouth() { return this._sw.lat; }
-    /**
-     * Returns the east edge of the bounding box.
-     *
-     * @returns {number} The east edge of the bounding box.
-     */
-    getEast() { return this._ne.lng; }
-    /**
-     * Returns the north edge of the bounding box.
-     *
-     * @returns {number} The north edge of the bounding box.
-     */
-    getNorth() { return this._ne.lat; }
-    /**
-     * Returns the bounding box represented as an array.
-     *
-     * @returns {Array<Array<number>>} The bounding box represented as an array, consisting of the
-     *   southwest and northeast coordinates of the bounding represented as arrays of numbers.
-     * @example
-     * var llb = new maplibregl.LngLatBounds([-73.9876, 40.7661], [-73.9397, 40.8002]);
-     * llb.toArray(); // = [[-73.9876, 40.7661], [-73.9397, 40.8002]]
-     */
-    toArray() {
-        return [this._sw.toArray(), this._ne.toArray()];
-    }
-    /**
-     * Return the bounding box represented as a string.
-     *
-     * @returns {string} The bounding box represents as a string of the format
-     *   `'LngLatBounds(LngLat(lng, lat), LngLat(lng, lat))'`.
-     * @example
-     * var llb = new maplibregl.LngLatBounds([-73.9876, 40.7661], [-73.9397, 40.8002]);
-     * llb.toString(); // = "LngLatBounds(LngLat(-73.9876, 40.7661), LngLat(-73.9397, 40.8002))"
-     */
-    toString() {
-        return `LngLatBounds(${this._sw.toString()}, ${this._ne.toString()})`;
-    }
-    /**
-     * Check if the bounding box is an empty/`null`-type box.
-     *
-     * @returns {boolean} True if bounds have been defined, otherwise false.
-     */
-    isEmpty() {
-        return !(this._sw && this._ne);
-    }
-    /**
-     * Check if the point is within the bounding box.
-     *
-     * @param {LngLatLike} lnglat geographic point to check against.
-     * @returns {boolean} True if the point is within the bounding box.
-     * @example
-     * var llb = new maplibregl.LngLatBounds(
-     *   new maplibregl.LngLat(-73.9876, 40.7661),
-     *   new maplibregl.LngLat(-73.9397, 40.8002)
-     * );
-     *
-     * var ll = new maplibregl.LngLat(-73.9567, 40.7789);
-     *
-     * console.log(llb.contains(ll)); // = true
-     */
-    contains(lnglat) {
-        const { lng, lat } = LngLat.convert(lnglat);
-        const containsLatitude = this._sw.lat <= lat && lat <= this._ne.lat;
-        let containsLongitude = this._sw.lng <= lng && lng <= this._ne.lng;
-        if (this._sw.lng > this._ne.lng) { // wrapped coordinates
-            containsLongitude = this._sw.lng >= lng && lng >= this._ne.lng;
-        }
-        return containsLatitude && containsLongitude;
-    }
-    /**
-     * Converts an array to a `LngLatBounds` object.
-     *
-     * If a `LngLatBounds` object is passed in, the function returns it unchanged.
-     *
-     * Internally, the function calls `LngLat#convert` to convert arrays to `LngLat` values.
-     *
-     * @param {LngLatBoundsLike} input An array of two coordinates to convert, or a `LngLatBounds` object to return.
-     * @returns {LngLatBounds} A new `LngLatBounds` object, if a conversion occurred, or the original `LngLatBounds` object.
-     * @example
-     * var arr = [[-73.9876, 40.7661], [-73.9397, 40.8002]];
-     * var llb = maplibregl.LngLatBounds.convert(arr);
-     * llb;   // = LngLatBounds {_sw: LngLat {lng: -73.9876, lat: 40.7661}, _ne: LngLat {lng: -73.9397, lat: 40.8002}}
-     */
-    static convert(input) {
-        if (input instanceof LngLatBounds)
-            return input;
-        if (!input)
-            return input;
-        return new LngLatBounds(input);
-    }
-}
-var LngLatBounds$1 = LngLatBounds;
 
 /*
  * The average circumference of the world in meters.
@@ -29037,7 +28996,7 @@ class CanonicalTileID {
     }
     getTilePoint(coord) {
         const tilesAtZoom = Math.pow(2, this.z);
-        return new pointGeometry((coord.x * tilesAtZoom - this.x) * EXTENT, (coord.y * tilesAtZoom - this.y) * EXTENT);
+        return new Point$2((coord.x * tilesAtZoom - this.x) * EXTENT, (coord.y * tilesAtZoom - this.y) * EXTENT);
     }
     toString() {
         return `${this.z}/${this.x}/${this.y}`;
@@ -29371,7 +29330,7 @@ class FeatureIndex {
     }
     loadVTLayers() {
         if (!this.vtLayers) {
-            this.vtLayers = new vectorTile.VectorTile(new pbf(this.rawTileData)).layers;
+            this.vtLayers = new vectorTile.VectorTile(new Protobuf(this.rawTileData)).layers;
             this.sourceLayerCoder = new DictionaryCoder(this.vtLayers ? Object.keys(this.vtLayers).sort() : ['_geojsonTileLayer']);
         }
         return this.vtLayers;
@@ -29513,7 +29472,1255 @@ function topDownFeatureComparator(a, b) {
     return b - a;
 }
 
-const refProperties = ['type', 'source', 'source-layer', 'minzoom', 'maxzoom', 'filter', 'layout'];
+/**
+ * Returns the part of a multiline that intersects with the provided rectangular box.
+ *
+ * @param lines
+ * @param x1 the left edge of the box
+ * @param y1 the top edge of the box
+ * @param x2 the right edge of the box
+ * @param y2 the bottom edge of the box
+ * @returns lines
+ * @private
+ */
+function clipLine(lines, x1, y1, x2, y2) {
+    const clippedLines = [];
+    for (let l = 0; l < lines.length; l++) {
+        const line = lines[l];
+        let clippedLine;
+        for (let i = 0; i < line.length - 1; i++) {
+            let p0 = line[i];
+            let p1 = line[i + 1];
+            if (p0.x < x1 && p1.x < x1) {
+                continue;
+            }
+            else if (p0.x < x1) {
+                p0 = new Point$2(x1, p0.y + (p1.y - p0.y) * ((x1 - p0.x) / (p1.x - p0.x)))._round();
+            }
+            else if (p1.x < x1) {
+                p1 = new Point$2(x1, p0.y + (p1.y - p0.y) * ((x1 - p0.x) / (p1.x - p0.x)))._round();
+            }
+            if (p0.y < y1 && p1.y < y1) {
+                continue;
+            }
+            else if (p0.y < y1) {
+                p0 = new Point$2(p0.x + (p1.x - p0.x) * ((y1 - p0.y) / (p1.y - p0.y)), y1)._round();
+            }
+            else if (p1.y < y1) {
+                p1 = new Point$2(p0.x + (p1.x - p0.x) * ((y1 - p0.y) / (p1.y - p0.y)), y1)._round();
+            }
+            if (p0.x >= x2 && p1.x >= x2) {
+                continue;
+            }
+            else if (p0.x >= x2) {
+                p0 = new Point$2(x2, p0.y + (p1.y - p0.y) * ((x2 - p0.x) / (p1.x - p0.x)))._round();
+            }
+            else if (p1.x >= x2) {
+                p1 = new Point$2(x2, p0.y + (p1.y - p0.y) * ((x2 - p0.x) / (p1.x - p0.x)))._round();
+            }
+            if (p0.y >= y2 && p1.y >= y2) {
+                continue;
+            }
+            else if (p0.y >= y2) {
+                p0 = new Point$2(p0.x + (p1.x - p0.x) * ((y2 - p0.y) / (p1.y - p0.y)), y2)._round();
+            }
+            else if (p1.y >= y2) {
+                p1 = new Point$2(p0.x + (p1.x - p0.x) * ((y2 - p0.y) / (p1.y - p0.y)), y2)._round();
+            }
+            if (!clippedLine || !p0.equals(clippedLine[clippedLine.length - 1])) {
+                clippedLine = [p0];
+                clippedLines.push(clippedLine);
+            }
+            clippedLine.push(p1);
+        }
+    }
+    return clippedLines;
+}
+
+class Anchor extends Point$2 {
+    constructor(x, y, angle, segment) {
+        super(x, y);
+        this.angle = angle;
+        if (segment !== undefined) {
+            this.segment = segment;
+        }
+    }
+    clone() {
+        return new Anchor(this.x, this.y, this.angle, this.segment);
+    }
+}
+register('Anchor', Anchor);
+
+/**
+ * Labels placed around really sharp angles aren't readable. Check if any
+ * part of the potential label has a combined angle that is too big.
+ *
+ * @param line
+ * @param anchor The point on the line around which the label is anchored.
+ * @param labelLength The length of the label in geometry units.
+ * @param windowSize The check fails if the combined angles within a part of the line that is `windowSize` long is too big.
+ * @param maxAngle The maximum combined angle that any window along the label is allowed to have.
+ *
+ * @returns {boolean} whether the label should be placed
+ * @private
+ */
+function checkMaxAngle(line, anchor, labelLength, windowSize, maxAngle) {
+    // horizontal labels always pass
+    if (anchor.segment === undefined)
+        return true;
+    let p = anchor;
+    let index = anchor.segment + 1;
+    let anchorDistance = 0;
+    // move backwards along the line to the first segment the label appears on
+    while (anchorDistance > -labelLength / 2) {
+        index--;
+        // there isn't enough room for the label after the beginning of the line
+        if (index < 0)
+            return false;
+        anchorDistance -= line[index].dist(p);
+        p = line[index];
+    }
+    anchorDistance += line[index].dist(line[index + 1]);
+    index++;
+    // store recent corners and their total angle difference
+    const recentCorners = [];
+    let recentAngleDelta = 0;
+    // move forwards by the length of the label and check angles along the way
+    while (anchorDistance < labelLength / 2) {
+        const prev = line[index - 1];
+        const current = line[index];
+        const next = line[index + 1];
+        // there isn't enough room for the label before the end of the line
+        if (!next)
+            return false;
+        let angleDelta = prev.angleTo(current) - current.angleTo(next);
+        // restrict angle to -pi..pi range
+        angleDelta = Math.abs(((angleDelta + 3 * Math.PI) % (Math.PI * 2)) - Math.PI);
+        recentCorners.push({
+            distance: anchorDistance,
+            angleDelta
+        });
+        recentAngleDelta += angleDelta;
+        // remove corners that are far enough away from the list of recent anchors
+        while (anchorDistance - recentCorners[0].distance > windowSize) {
+            recentAngleDelta -= recentCorners.shift().angleDelta;
+        }
+        // the sum of angles within the window area exceeds the maximum allowed value. check fails.
+        if (recentAngleDelta > maxAngle)
+            return false;
+        index++;
+        anchorDistance += current.dist(next);
+    }
+    // no part of the line had an angle greater than the maximum allowed. check passes.
+    return true;
+}
+
+function getLineLength(line) {
+    let lineLength = 0;
+    for (let k = 0; k < line.length - 1; k++) {
+        lineLength += line[k].dist(line[k + 1]);
+    }
+    return lineLength;
+}
+function getAngleWindowSize(shapedText, glyphSize, boxScale) {
+    return shapedText ?
+        3 / 5 * glyphSize * boxScale :
+        0;
+}
+function getShapedLabelLength(shapedText, shapedIcon) {
+    return Math.max(shapedText ? shapedText.right - shapedText.left : 0, shapedIcon ? shapedIcon.right - shapedIcon.left : 0);
+}
+function getCenterAnchor(line, maxAngle, shapedText, shapedIcon, glyphSize, boxScale) {
+    const angleWindowSize = getAngleWindowSize(shapedText, glyphSize, boxScale);
+    const labelLength = getShapedLabelLength(shapedText, shapedIcon) * boxScale;
+    let prevDistance = 0;
+    const centerDistance = getLineLength(line) / 2;
+    for (let i = 0; i < line.length - 1; i++) {
+        const a = line[i], b = line[i + 1];
+        const segmentDistance = a.dist(b);
+        if (prevDistance + segmentDistance > centerDistance) {
+            // The center is on this segment
+            const t = (centerDistance - prevDistance) / segmentDistance, x = interpolate.number(a.x, b.x, t), y = interpolate.number(a.y, b.y, t);
+            const anchor = new Anchor(x, y, b.angleTo(a), i);
+            anchor._round();
+            if (!angleWindowSize || checkMaxAngle(line, anchor, labelLength, angleWindowSize, maxAngle)) {
+                return anchor;
+            }
+            else {
+                return;
+            }
+        }
+        prevDistance += segmentDistance;
+    }
+}
+function getAnchors(line, spacing, maxAngle, shapedText, shapedIcon, glyphSize, boxScale, overscaling, tileExtent) {
+    // Resample a line to get anchor points for labels and check that each
+    // potential label passes text-max-angle check and has enough froom to fit
+    // on the line.
+    const angleWindowSize = getAngleWindowSize(shapedText, glyphSize, boxScale);
+    const shapedLabelLength = getShapedLabelLength(shapedText, shapedIcon);
+    const labelLength = shapedLabelLength * boxScale;
+    // Is the line continued from outside the tile boundary?
+    const isLineContinued = line[0].x === 0 || line[0].x === tileExtent || line[0].y === 0 || line[0].y === tileExtent;
+    // Is the label long, relative to the spacing?
+    // If so, adjust the spacing so there is always a minimum space of `spacing / 4` between label edges.
+    if (spacing - labelLength < spacing / 4) {
+        spacing = labelLength + spacing / 4;
+    }
+    // Offset the first anchor by:
+    // Either half the label length plus a fixed extra offset if the line is not continued
+    // Or half the spacing if the line is continued.
+    // For non-continued lines, add a bit of fixed extra offset to avoid collisions at T intersections.
+    const fixedExtraOffset = glyphSize * 2;
+    const offset = !isLineContinued ?
+        ((shapedLabelLength / 2 + fixedExtraOffset) * boxScale * overscaling) % spacing :
+        (spacing / 2 * overscaling) % spacing;
+    return resample(line, offset, spacing, angleWindowSize, maxAngle, labelLength, isLineContinued, false, tileExtent);
+}
+function resample(line, offset, spacing, angleWindowSize, maxAngle, labelLength, isLineContinued, placeAtMiddle, tileExtent) {
+    const halfLabelLength = labelLength / 2;
+    const lineLength = getLineLength(line);
+    let distance = 0, markedDistance = offset - spacing;
+    let anchors = [];
+    for (let i = 0; i < line.length - 1; i++) {
+        const a = line[i], b = line[i + 1];
+        const segmentDist = a.dist(b), angle = b.angleTo(a);
+        while (markedDistance + spacing < distance + segmentDist) {
+            markedDistance += spacing;
+            const t = (markedDistance - distance) / segmentDist, x = interpolate.number(a.x, b.x, t), y = interpolate.number(a.y, b.y, t);
+            // Check that the point is within the tile boundaries and that
+            // the label would fit before the beginning and end of the line
+            // if placed at this point.
+            if (x >= 0 && x < tileExtent && y >= 0 && y < tileExtent &&
+                markedDistance - halfLabelLength >= 0 &&
+                markedDistance + halfLabelLength <= lineLength) {
+                const anchor = new Anchor(x, y, angle, i);
+                anchor._round();
+                if (!angleWindowSize || checkMaxAngle(line, anchor, labelLength, angleWindowSize, maxAngle)) {
+                    anchors.push(anchor);
+                }
+            }
+        }
+        distance += segmentDist;
+    }
+    if (!placeAtMiddle && !anchors.length && !isLineContinued) {
+        // The first attempt at finding anchors at which labels can be placed failed.
+        // Try again, but this time just try placing one anchor at the middle of the line.
+        // This has the most effect for short lines in overscaled tiles, since the
+        // initial offset used in overscaled tiles is calculated to align labels with positions in
+        // parent tiles instead of placing the label as close to the beginning as possible.
+        anchors = resample(line, distance / 2, spacing, angleWindowSize, maxAngle, labelLength, isLineContinued, true, tileExtent);
+    }
+    return anchors;
+}
+
+// If you have a 10px icon that isn't perfectly aligned to the pixel grid it will cover 11 actual
+// pixels. The quad needs to be padded to account for this, otherwise they'll look slightly clipped
+// on one edge in some cases.
+const border = IMAGE_PADDING;
+/**
+ * Create the quads used for rendering an icon.
+ * @private
+ */
+function getIconQuads(shapedIcon, iconRotate, isSDFIcon, hasIconTextFit) {
+    const quads = [];
+    const image = shapedIcon.image;
+    const pixelRatio = image.pixelRatio;
+    const imageWidth = image.paddedRect.w - 2 * border;
+    const imageHeight = image.paddedRect.h - 2 * border;
+    const iconWidth = shapedIcon.right - shapedIcon.left;
+    const iconHeight = shapedIcon.bottom - shapedIcon.top;
+    const stretchX = image.stretchX || [[0, imageWidth]];
+    const stretchY = image.stretchY || [[0, imageHeight]];
+    const reduceRanges = (sum, range) => sum + range[1] - range[0];
+    const stretchWidth = stretchX.reduce(reduceRanges, 0);
+    const stretchHeight = stretchY.reduce(reduceRanges, 0);
+    const fixedWidth = imageWidth - stretchWidth;
+    const fixedHeight = imageHeight - stretchHeight;
+    let stretchOffsetX = 0;
+    let stretchContentWidth = stretchWidth;
+    let stretchOffsetY = 0;
+    let stretchContentHeight = stretchHeight;
+    let fixedOffsetX = 0;
+    let fixedContentWidth = fixedWidth;
+    let fixedOffsetY = 0;
+    let fixedContentHeight = fixedHeight;
+    if (image.content && hasIconTextFit) {
+        const content = image.content;
+        stretchOffsetX = sumWithinRange(stretchX, 0, content[0]);
+        stretchOffsetY = sumWithinRange(stretchY, 0, content[1]);
+        stretchContentWidth = sumWithinRange(stretchX, content[0], content[2]);
+        stretchContentHeight = sumWithinRange(stretchY, content[1], content[3]);
+        fixedOffsetX = content[0] - stretchOffsetX;
+        fixedOffsetY = content[1] - stretchOffsetY;
+        fixedContentWidth = content[2] - content[0] - stretchContentWidth;
+        fixedContentHeight = content[3] - content[1] - stretchContentHeight;
+    }
+    const makeBox = (left, top, right, bottom) => {
+        const leftEm = getEmOffset(left.stretch - stretchOffsetX, stretchContentWidth, iconWidth, shapedIcon.left);
+        const leftPx = getPxOffset(left.fixed - fixedOffsetX, fixedContentWidth, left.stretch, stretchWidth);
+        const topEm = getEmOffset(top.stretch - stretchOffsetY, stretchContentHeight, iconHeight, shapedIcon.top);
+        const topPx = getPxOffset(top.fixed - fixedOffsetY, fixedContentHeight, top.stretch, stretchHeight);
+        const rightEm = getEmOffset(right.stretch - stretchOffsetX, stretchContentWidth, iconWidth, shapedIcon.left);
+        const rightPx = getPxOffset(right.fixed - fixedOffsetX, fixedContentWidth, right.stretch, stretchWidth);
+        const bottomEm = getEmOffset(bottom.stretch - stretchOffsetY, stretchContentHeight, iconHeight, shapedIcon.top);
+        const bottomPx = getPxOffset(bottom.fixed - fixedOffsetY, fixedContentHeight, bottom.stretch, stretchHeight);
+        const tl = new Point$2(leftEm, topEm);
+        const tr = new Point$2(rightEm, topEm);
+        const br = new Point$2(rightEm, bottomEm);
+        const bl = new Point$2(leftEm, bottomEm);
+        const pixelOffsetTL = new Point$2(leftPx / pixelRatio, topPx / pixelRatio);
+        const pixelOffsetBR = new Point$2(rightPx / pixelRatio, bottomPx / pixelRatio);
+        const angle = iconRotate * Math.PI / 180;
+        if (angle) {
+            const sin = Math.sin(angle), cos = Math.cos(angle), matrix = [cos, -sin, sin, cos];
+            tl._matMult(matrix);
+            tr._matMult(matrix);
+            bl._matMult(matrix);
+            br._matMult(matrix);
+        }
+        const x1 = left.stretch + left.fixed;
+        const x2 = right.stretch + right.fixed;
+        const y1 = top.stretch + top.fixed;
+        const y2 = bottom.stretch + bottom.fixed;
+        const subRect = {
+            x: image.paddedRect.x + border + x1,
+            y: image.paddedRect.y + border + y1,
+            w: x2 - x1,
+            h: y2 - y1
+        };
+        const minFontScaleX = fixedContentWidth / pixelRatio / iconWidth;
+        const minFontScaleY = fixedContentHeight / pixelRatio / iconHeight;
+        // Icon quad is padded, so texture coordinates also need to be padded.
+        return { tl, tr, bl, br, tex: subRect, writingMode: undefined, glyphOffset: [0, 0], sectionIndex: 0, pixelOffsetTL, pixelOffsetBR, minFontScaleX, minFontScaleY, isSDF: isSDFIcon };
+    };
+    if (!hasIconTextFit || (!image.stretchX && !image.stretchY)) {
+        quads.push(makeBox({ fixed: 0, stretch: -1 }, { fixed: 0, stretch: -1 }, { fixed: 0, stretch: imageWidth + 1 }, { fixed: 0, stretch: imageHeight + 1 }));
+    }
+    else {
+        const xCuts = stretchZonesToCuts(stretchX, fixedWidth, stretchWidth);
+        const yCuts = stretchZonesToCuts(stretchY, fixedHeight, stretchHeight);
+        for (let xi = 0; xi < xCuts.length - 1; xi++) {
+            const x1 = xCuts[xi];
+            const x2 = xCuts[xi + 1];
+            for (let yi = 0; yi < yCuts.length - 1; yi++) {
+                const y1 = yCuts[yi];
+                const y2 = yCuts[yi + 1];
+                quads.push(makeBox(x1, y1, x2, y2));
+            }
+        }
+    }
+    return quads;
+}
+function sumWithinRange(ranges, min, max) {
+    let sum = 0;
+    for (const range of ranges) {
+        sum += Math.max(min, Math.min(max, range[1])) - Math.max(min, Math.min(max, range[0]));
+    }
+    return sum;
+}
+function stretchZonesToCuts(stretchZones, fixedSize, stretchSize) {
+    const cuts = [{ fixed: -border, stretch: 0 }];
+    for (const [c1, c2] of stretchZones) {
+        const last = cuts[cuts.length - 1];
+        cuts.push({
+            fixed: c1 - last.stretch,
+            stretch: last.stretch
+        });
+        cuts.push({
+            fixed: c1 - last.stretch,
+            stretch: last.stretch + (c2 - c1)
+        });
+    }
+    cuts.push({
+        fixed: fixedSize + border,
+        stretch: stretchSize
+    });
+    return cuts;
+}
+function getEmOffset(stretchOffset, stretchSize, iconSize, iconOffset) {
+    return stretchOffset / stretchSize * iconSize + iconOffset;
+}
+function getPxOffset(fixedOffset, fixedSize, stretchOffset, stretchSize) {
+    return fixedOffset - fixedSize * stretchOffset / stretchSize;
+}
+/**
+ * Create the quads used for rendering a text label.
+ * @private
+ */
+function getGlyphQuads(anchor, shaping, textOffset, layer, alongLine, feature, imageMap, allowVerticalPlacement) {
+    const textRotate = layer.layout.get('text-rotate').evaluate(feature, {}) * Math.PI / 180;
+    const quads = [];
+    for (const line of shaping.positionedLines) {
+        for (const positionedGlyph of line.positionedGlyphs) {
+            if (!positionedGlyph.rect)
+                continue;
+            const textureRect = positionedGlyph.rect || {};
+            // The rects have an additional buffer that is not included in their size.
+            const glyphPadding = 1.0;
+            let rectBuffer = GLYPH_PBF_BORDER + glyphPadding;
+            let isSDF = true;
+            let pixelRatio = 1.0;
+            let lineOffset = 0.0;
+            const rotateVerticalGlyph = (alongLine || allowVerticalPlacement) && positionedGlyph.vertical;
+            const halfAdvance = positionedGlyph.metrics.advance * positionedGlyph.scale / 2;
+            // Align images and scaled glyphs in the middle of a vertical line.
+            if (allowVerticalPlacement && shaping.verticalizable) {
+                const scaledGlyphOffset = (positionedGlyph.scale - 1) * ONE_EM;
+                const imageOffset = (ONE_EM - positionedGlyph.metrics.width * positionedGlyph.scale) / 2;
+                lineOffset = line.lineOffset / 2 - (positionedGlyph.imageName ? -imageOffset : scaledGlyphOffset);
+            }
+            if (positionedGlyph.imageName) {
+                const image = imageMap[positionedGlyph.imageName];
+                isSDF = image.sdf;
+                pixelRatio = image.pixelRatio;
+                rectBuffer = IMAGE_PADDING / pixelRatio;
+            }
+            const glyphOffset = alongLine ?
+                [positionedGlyph.x + halfAdvance, positionedGlyph.y] :
+                [0, 0];
+            let builtInOffset = alongLine ?
+                [0, 0] :
+                [positionedGlyph.x + halfAdvance + textOffset[0], positionedGlyph.y + textOffset[1] - lineOffset];
+            let verticalizedLabelOffset = [0, 0];
+            if (rotateVerticalGlyph) {
+                // Vertical POI labels that are rotated 90deg CW and whose glyphs must preserve upright orientation
+                // need to be rotated 90deg CCW. After a quad is rotated, it is translated to the original built-in offset.
+                verticalizedLabelOffset = builtInOffset;
+                builtInOffset = [0, 0];
+            }
+            const x1 = (positionedGlyph.metrics.left - rectBuffer) * positionedGlyph.scale - halfAdvance + builtInOffset[0];
+            const y1 = (-positionedGlyph.metrics.top - rectBuffer) * positionedGlyph.scale + builtInOffset[1];
+            const x2 = x1 + textureRect.w * positionedGlyph.scale / pixelRatio;
+            const y2 = y1 + textureRect.h * positionedGlyph.scale / pixelRatio;
+            const tl = new Point$2(x1, y1);
+            const tr = new Point$2(x2, y1);
+            const bl = new Point$2(x1, y2);
+            const br = new Point$2(x2, y2);
+            if (rotateVerticalGlyph) {
+                // Vertical-supporting glyphs are laid out in 24x24 point boxes (1 square em)
+                // In horizontal orientation, the y values for glyphs are below the midline
+                // and we use a "yOffset" of -17 to pull them up to the middle.
+                // By rotating counter-clockwise around the point at the center of the left
+                // edge of a 24x24 layout box centered below the midline, we align the center
+                // of the glyphs with the horizontal midline, so the yOffset is no longer
+                // necessary, but we also pull the glyph to the left along the x axis.
+                // The y coordinate includes baseline yOffset, thus needs to be accounted
+                // for when glyph is rotated and translated.
+                const center = new Point$2(-halfAdvance, halfAdvance - SHAPING_DEFAULT_OFFSET);
+                const verticalRotation = -Math.PI / 2;
+                // xHalfWidthOffsetCorrection is a difference between full-width and half-width
+                // advance, should be 0 for full-width glyphs and will pull up half-width glyphs.
+                const xHalfWidthOffsetCorrection = ONE_EM / 2 - halfAdvance;
+                const yImageOffsetCorrection = positionedGlyph.imageName ? xHalfWidthOffsetCorrection : 0.0;
+                const halfWidthOffsetCorrection = new Point$2(5 - SHAPING_DEFAULT_OFFSET - xHalfWidthOffsetCorrection, -yImageOffsetCorrection);
+                const verticalOffsetCorrection = new Point$2(...verticalizedLabelOffset);
+                tl._rotateAround(verticalRotation, center)._add(halfWidthOffsetCorrection)._add(verticalOffsetCorrection);
+                tr._rotateAround(verticalRotation, center)._add(halfWidthOffsetCorrection)._add(verticalOffsetCorrection);
+                bl._rotateAround(verticalRotation, center)._add(halfWidthOffsetCorrection)._add(verticalOffsetCorrection);
+                br._rotateAround(verticalRotation, center)._add(halfWidthOffsetCorrection)._add(verticalOffsetCorrection);
+            }
+            if (textRotate) {
+                const sin = Math.sin(textRotate), cos = Math.cos(textRotate), matrix = [cos, -sin, sin, cos];
+                tl._matMult(matrix);
+                tr._matMult(matrix);
+                bl._matMult(matrix);
+                br._matMult(matrix);
+            }
+            const pixelOffsetTL = new Point$2(0, 0);
+            const pixelOffsetBR = new Point$2(0, 0);
+            const minFontScaleX = 0;
+            const minFontScaleY = 0;
+            quads.push({ tl, tr, bl, br, tex: textureRect, writingMode: shaping.writingMode, glyphOffset, sectionIndex: positionedGlyph.sectionIndex, isSDF, pixelOffsetTL, pixelOffsetBR, minFontScaleX, minFontScaleY });
+        }
+    }
+    return quads;
+}
+
+/**
+ * A CollisionFeature represents the area of the tile covered by a single label.
+ * It is used with CollisionIndex to check if the label overlaps with any
+ * previous labels. A CollisionFeature is mostly just a set of CollisionBox
+ * objects.
+ *
+ * @private
+ */
+class CollisionFeature {
+    /**
+     * Create a CollisionFeature, adding its collision box data to the given collisionBoxArray in the process.
+     * For line aligned labels a collision circle diameter is computed instead.
+     *
+     * @param anchor The point along the line around which the label is anchored.
+     * @param shaped The text or icon shaping results.
+     * @param boxScale A magic number used to convert from glyph metrics units to geometry units.
+     * @param padding The amount of padding to add around the label edges.
+     * @param alignLine Whether the label is aligned with the line or the viewport.
+     * @private
+     */
+    constructor(collisionBoxArray, anchor, featureIndex, sourceLayerIndex, bucketIndex, shaped, boxScale, padding, alignLine, rotate) {
+        this.boxStartIndex = collisionBoxArray.length;
+        if (alignLine) {
+            // Compute height of the shape in glyph metrics and apply collision padding.
+            // Note that the pixel based 'text-padding' is applied at runtime
+            let top = shaped.top;
+            let bottom = shaped.bottom;
+            const collisionPadding = shaped.collisionPadding;
+            if (collisionPadding) {
+                top -= collisionPadding[1];
+                bottom += collisionPadding[3];
+            }
+            let height = bottom - top;
+            if (height > 0) {
+                // set minimum box height to avoid very many small labels
+                height = Math.max(10, height);
+                this.circleDiameter = height;
+            }
+        }
+        else {
+            // margin is in CSS order: [top, right, bottom, left]
+            let y1 = shaped.top * boxScale - padding[0];
+            let y2 = shaped.bottom * boxScale + padding[2];
+            let x1 = shaped.left * boxScale - padding[3];
+            let x2 = shaped.right * boxScale + padding[1];
+            const collisionPadding = shaped.collisionPadding;
+            if (collisionPadding) {
+                x1 -= collisionPadding[0] * boxScale;
+                y1 -= collisionPadding[1] * boxScale;
+                x2 += collisionPadding[2] * boxScale;
+                y2 += collisionPadding[3] * boxScale;
+            }
+            if (rotate) {
+                // Account for *-rotate in point collision boxes
+                // See https://github.com/mapbox/mapbox-gl-js/issues/6075
+                // Doesn't account for icon-text-fit
+                const tl = new Point$2(x1, y1);
+                const tr = new Point$2(x2, y1);
+                const bl = new Point$2(x1, y2);
+                const br = new Point$2(x2, y2);
+                const rotateRadians = rotate * Math.PI / 180;
+                tl._rotate(rotateRadians);
+                tr._rotate(rotateRadians);
+                bl._rotate(rotateRadians);
+                br._rotate(rotateRadians);
+                // Collision features require an "on-axis" geometry,
+                // so take the envelope of the rotated geometry
+                // (may be quite large for wide labels rotated 45 degrees)
+                x1 = Math.min(tl.x, tr.x, bl.x, br.x);
+                x2 = Math.max(tl.x, tr.x, bl.x, br.x);
+                y1 = Math.min(tl.y, tr.y, bl.y, br.y);
+                y2 = Math.max(tl.y, tr.y, bl.y, br.y);
+            }
+            collisionBoxArray.emplaceBack(anchor.x, anchor.y, x1, y1, x2, y2, featureIndex, sourceLayerIndex, bucketIndex);
+        }
+        this.boxEndIndex = collisionBoxArray.length;
+    }
+}
+
+class TinyQueue {
+    constructor(data = [], compare = defaultCompare) {
+        this.data = data;
+        this.length = this.data.length;
+        this.compare = compare;
+
+        if (this.length > 0) {
+            for (let i = (this.length >> 1) - 1; i >= 0; i--) this._down(i);
+        }
+    }
+
+    push(item) {
+        this.data.push(item);
+        this.length++;
+        this._up(this.length - 1);
+    }
+
+    pop() {
+        if (this.length === 0) return undefined;
+
+        const top = this.data[0];
+        const bottom = this.data.pop();
+        this.length--;
+
+        if (this.length > 0) {
+            this.data[0] = bottom;
+            this._down(0);
+        }
+
+        return top;
+    }
+
+    peek() {
+        return this.data[0];
+    }
+
+    _up(pos) {
+        const {data, compare} = this;
+        const item = data[pos];
+
+        while (pos > 0) {
+            const parent = (pos - 1) >> 1;
+            const current = data[parent];
+            if (compare(item, current) >= 0) break;
+            data[pos] = current;
+            pos = parent;
+        }
+
+        data[pos] = item;
+    }
+
+    _down(pos) {
+        const {data, compare} = this;
+        const halfLength = this.length >> 1;
+        const item = data[pos];
+
+        while (pos < halfLength) {
+            let left = (pos << 1) + 1;
+            let best = data[left];
+            const right = left + 1;
+
+            if (right < this.length && compare(data[right], best) < 0) {
+                left = right;
+                best = data[right];
+            }
+            if (compare(best, item) >= 0) break;
+
+            data[pos] = best;
+            pos = left;
+        }
+
+        data[pos] = item;
+    }
+}
+
+function defaultCompare(a, b) {
+    return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Finds an approximation of a polygon's Pole Of Inaccessibiliy https://en.wikipedia.org/wiki/Pole_of_inaccessibility
+ * This is a copy of http://github.com/mapbox/polylabel adapted to use Points
+ *
+ * @param polygonRings first item in array is the outer ring followed optionally by the list of holes, should be an element of the result of util/classify_rings
+ * @param precision Specified in input coordinate units. If 0 returns after first run, if > 0 repeatedly narrows the search space until the radius of the area searched for the best pole is less than precision
+ * @param debug Print some statistics to the console during execution
+ * @returns Pole of Inaccessibiliy.
+ * @private
+ */
+function findPoleOfInaccessibility(polygonRings, precision = 1, debug = false) {
+    // find the bounding box of the outer ring
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const outerRing = polygonRings[0];
+    for (let i = 0; i < outerRing.length; i++) {
+        const p = outerRing[i];
+        if (!i || p.x < minX)
+            minX = p.x;
+        if (!i || p.y < minY)
+            minY = p.y;
+        if (!i || p.x > maxX)
+            maxX = p.x;
+        if (!i || p.y > maxY)
+            maxY = p.y;
+    }
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const cellSize = Math.min(width, height);
+    let h = cellSize / 2;
+    // a priority queue of cells in order of their "potential" (max distance to polygon)
+    const cellQueue = new TinyQueue([], compareMax);
+    if (cellSize === 0)
+        return new Point$2(minX, minY);
+    // cover polygon with initial cells
+    for (let x = minX; x < maxX; x += cellSize) {
+        for (let y = minY; y < maxY; y += cellSize) {
+            cellQueue.push(new Cell(x + h, y + h, h, polygonRings));
+        }
+    }
+    // take centroid as the first best guess
+    let bestCell = getCentroidCell(polygonRings);
+    let numProbes = cellQueue.length;
+    while (cellQueue.length) {
+        // pick the most promising cell from the queue
+        const cell = cellQueue.pop();
+        // update the best cell if we found a better one
+        if (cell.d > bestCell.d || !bestCell.d) {
+            bestCell = cell;
+            if (debug)
+                console.log('found best %d after %d probes', Math.round(1e4 * cell.d) / 1e4, numProbes);
+        }
+        // do not drill down further if there's no chance of a better solution
+        if (cell.max - bestCell.d <= precision)
+            continue;
+        // split the cell into four cells
+        h = cell.h / 2;
+        cellQueue.push(new Cell(cell.p.x - h, cell.p.y - h, h, polygonRings));
+        cellQueue.push(new Cell(cell.p.x + h, cell.p.y - h, h, polygonRings));
+        cellQueue.push(new Cell(cell.p.x - h, cell.p.y + h, h, polygonRings));
+        cellQueue.push(new Cell(cell.p.x + h, cell.p.y + h, h, polygonRings));
+        numProbes += 4;
+    }
+    if (debug) {
+        console.log(`num probes: ${numProbes}`);
+        console.log(`best distance: ${bestCell.d}`);
+    }
+    return bestCell.p;
+}
+function compareMax(a, b) {
+    return b.max - a.max;
+}
+function Cell(x, y, h, polygon) {
+    this.p = new Point$2(x, y);
+    this.h = h; // half the cell size
+    this.d = pointToPolygonDist(this.p, polygon); // distance from cell center to polygon
+    this.max = this.d + this.h * Math.SQRT2; // max distance to polygon within a cell
+}
+// signed distance from point to polygon outline (negative if point is outside)
+function pointToPolygonDist(p, polygon) {
+    let inside = false;
+    let minDistSq = Infinity;
+    for (let k = 0; k < polygon.length; k++) {
+        const ring = polygon[k];
+        for (let i = 0, len = ring.length, j = len - 1; i < len; j = i++) {
+            const a = ring[i];
+            const b = ring[j];
+            if ((a.y > p.y !== b.y > p.y) &&
+                (p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x))
+                inside = !inside;
+            minDistSq = Math.min(minDistSq, distToSegmentSquared(p, a, b));
+        }
+    }
+    return (inside ? 1 : -1) * Math.sqrt(minDistSq);
+}
+// get polygon centroid
+function getCentroidCell(polygon) {
+    let area = 0;
+    let x = 0;
+    let y = 0;
+    const points = polygon[0];
+    for (let i = 0, len = points.length, j = len - 1; i < len; j = i++) {
+        const a = points[i];
+        const b = points[j];
+        const f = a.x * b.y - b.x * a.y;
+        x += (a.x + b.x) * f;
+        y += (a.y + b.y) * f;
+        area += f * 3;
+    }
+    return new Cell(x / area, y / area, 0, polygon);
+}
+
+// The radial offset is to the edge of the text box
+// In the horizontal direction, the edge of the text box is where glyphs start
+// But in the vertical direction, the glyphs appear to "start" at the baseline
+// We don't actually load baseline data, but we assume an offset of ONE_EM - 17
+// (see "yOffset" in shaping.js)
+const baselineOffset = 7;
+const INVALID_TEXT_OFFSET = Number.POSITIVE_INFINITY;
+function evaluateVariableOffset(anchor, offset) {
+    function fromRadialOffset(anchor, radialOffset) {
+        let x = 0, y = 0;
+        if (radialOffset < 0)
+            radialOffset = 0; // Ignore negative offset.
+        // solve for r where r^2 + r^2 = radialOffset^2
+        const hypotenuse = radialOffset / Math.sqrt(2);
+        switch (anchor) {
+            case 'top-right':
+            case 'top-left':
+                y = hypotenuse - baselineOffset;
+                break;
+            case 'bottom-right':
+            case 'bottom-left':
+                y = -hypotenuse + baselineOffset;
+                break;
+            case 'bottom':
+                y = -radialOffset + baselineOffset;
+                break;
+            case 'top':
+                y = radialOffset - baselineOffset;
+                break;
+        }
+        switch (anchor) {
+            case 'top-right':
+            case 'bottom-right':
+                x = -hypotenuse;
+                break;
+            case 'top-left':
+            case 'bottom-left':
+                x = hypotenuse;
+                break;
+            case 'left':
+                x = radialOffset;
+                break;
+            case 'right':
+                x = -radialOffset;
+                break;
+        }
+        return [x, y];
+    }
+    function fromTextOffset(anchor, offsetX, offsetY) {
+        let x = 0, y = 0;
+        // Use absolute offset values.
+        offsetX = Math.abs(offsetX);
+        offsetY = Math.abs(offsetY);
+        switch (anchor) {
+            case 'top-right':
+            case 'top-left':
+            case 'top':
+                y = offsetY - baselineOffset;
+                break;
+            case 'bottom-right':
+            case 'bottom-left':
+            case 'bottom':
+                y = -offsetY + baselineOffset;
+                break;
+        }
+        switch (anchor) {
+            case 'top-right':
+            case 'bottom-right':
+            case 'right':
+                x = -offsetX;
+                break;
+            case 'top-left':
+            case 'bottom-left':
+            case 'left':
+                x = offsetX;
+                break;
+        }
+        return [x, y];
+    }
+    return (offset[1] !== INVALID_TEXT_OFFSET) ? fromTextOffset(anchor, offset[0], offset[1]) : fromRadialOffset(anchor, offset[0]);
+}
+function performSymbolLayout(args) {
+    args.bucket.createArrays();
+    const tileSize = 512 * args.bucket.overscaling;
+    args.bucket.tilePixelRatio = EXTENT / tileSize;
+    args.bucket.compareText = {};
+    args.bucket.iconsNeedLinear = false;
+    const layout = args.bucket.layers[0].layout;
+    const unevaluatedLayoutValues = args.bucket.layers[0]._unevaluatedLayout._values;
+    const sizes = {
+        // Filled in below, if *SizeData.kind is 'composite'
+        // compositeIconSizes: undefined,
+        // compositeTextSizes: undefined,
+        layoutIconSize: unevaluatedLayoutValues['icon-size'].possiblyEvaluate(new EvaluationParameters(args.bucket.zoom + 1), args.canonical),
+        layoutTextSize: unevaluatedLayoutValues['text-size'].possiblyEvaluate(new EvaluationParameters(args.bucket.zoom + 1), args.canonical),
+        textMaxSize: unevaluatedLayoutValues['text-size'].possiblyEvaluate(new EvaluationParameters(18))
+    };
+    if (args.bucket.textSizeData.kind === 'composite') {
+        const { minZoom, maxZoom } = args.bucket.textSizeData;
+        sizes.compositeTextSizes = [
+            unevaluatedLayoutValues['text-size'].possiblyEvaluate(new EvaluationParameters(minZoom), args.canonical),
+            unevaluatedLayoutValues['text-size'].possiblyEvaluate(new EvaluationParameters(maxZoom), args.canonical)
+        ];
+    }
+    if (args.bucket.iconSizeData.kind === 'composite') {
+        const { minZoom, maxZoom } = args.bucket.iconSizeData;
+        sizes.compositeIconSizes = [
+            unevaluatedLayoutValues['icon-size'].possiblyEvaluate(new EvaluationParameters(minZoom), args.canonical),
+            unevaluatedLayoutValues['icon-size'].possiblyEvaluate(new EvaluationParameters(maxZoom), args.canonical)
+        ];
+    }
+    const lineHeight = layout.get('text-line-height') * ONE_EM;
+    const textAlongLine = layout.get('text-rotation-alignment') !== 'viewport' && layout.get('symbol-placement') !== 'point';
+    const keepUpright = layout.get('text-keep-upright');
+    const textSize = layout.get('text-size');
+    for (const feature of args.bucket.features) {
+        const fontstack = layout.get('text-font').evaluate(feature, {}, args.canonical).join(',');
+        const layoutTextSizeThisZoom = textSize.evaluate(feature, {}, args.canonical);
+        const layoutTextSize = sizes.layoutTextSize.evaluate(feature, {}, args.canonical);
+        const layoutIconSize = sizes.layoutIconSize.evaluate(feature, {}, args.canonical);
+        const shapedTextOrientations = {
+            horizontal: {},
+            vertical: undefined
+        };
+        const text = feature.text;
+        let textOffset = [0, 0];
+        if (text) {
+            const unformattedText = text.toString();
+            const spacing = layout.get('text-letter-spacing').evaluate(feature, {}, args.canonical) * ONE_EM;
+            const spacingIfAllowed = allowsLetterSpacing(unformattedText) ? spacing : 0;
+            const textAnchor = layout.get('text-anchor').evaluate(feature, {}, args.canonical);
+            const variableTextAnchor = layout.get('text-variable-anchor');
+            if (!variableTextAnchor) {
+                const radialOffset = layout.get('text-radial-offset').evaluate(feature, {}, args.canonical);
+                // Layers with variable anchors use the `text-radial-offset` property and the [x, y] offset vector
+                // is calculated at placement time instead of layout time
+                if (radialOffset) {
+                    // The style spec says don't use `text-offset` and `text-radial-offset` together
+                    // but doesn't actually specify what happens if you use both. We go with the radial offset.
+                    textOffset = evaluateVariableOffset(textAnchor, [radialOffset * ONE_EM, INVALID_TEXT_OFFSET]);
+                }
+                else {
+                    textOffset = layout.get('text-offset').evaluate(feature, {}, args.canonical).map(t => t * ONE_EM);
+                }
+            }
+            let textJustify = textAlongLine ?
+                'center' :
+                layout.get('text-justify').evaluate(feature, {}, args.canonical);
+            const symbolPlacement = layout.get('symbol-placement');
+            const maxWidth = symbolPlacement === 'point' ?
+                layout.get('text-max-width').evaluate(feature, {}, args.canonical) * ONE_EM :
+                0;
+            const addVerticalShapingForPointLabelIfNeeded = () => {
+                if (args.bucket.allowVerticalPlacement && allowsVerticalWritingMode(unformattedText)) {
+                    // Vertical POI label placement is meant to be used for scripts that support vertical
+                    // writing mode, thus, default left justification is used. If Latin
+                    // scripts would need to be supported, this should take into account other justifications.
+                    shapedTextOrientations.vertical = shapeText(text, args.glyphMap, args.glyphPositions, args.imagePositions, fontstack, maxWidth, lineHeight, textAnchor, 'left', spacingIfAllowed, textOffset, exports.WritingMode.vertical, true, symbolPlacement, layoutTextSize, layoutTextSizeThisZoom);
+                }
+            };
+            // If this layer uses text-variable-anchor, generate shapings for all justification possibilities.
+            if (!textAlongLine && variableTextAnchor) {
+                const justifications = textJustify === 'auto' ?
+                    variableTextAnchor.map(a => getAnchorJustification(a)) :
+                    [textJustify];
+                let singleLine = false;
+                for (let i = 0; i < justifications.length; i++) {
+                    const justification = justifications[i];
+                    if (shapedTextOrientations.horizontal[justification])
+                        continue;
+                    if (singleLine) {
+                        // If the shaping for the first justification was only a single line, we
+                        // can re-use it for the other justifications
+                        shapedTextOrientations.horizontal[justification] = shapedTextOrientations.horizontal[0];
+                    }
+                    else {
+                        // If using text-variable-anchor for the layer, we use a center anchor for all shapings and apply
+                        // the offsets for the anchor in the placement step.
+                        const shaping = shapeText(text, args.glyphMap, args.glyphPositions, args.imagePositions, fontstack, maxWidth, lineHeight, 'center', justification, spacingIfAllowed, textOffset, exports.WritingMode.horizontal, false, symbolPlacement, layoutTextSize, layoutTextSizeThisZoom);
+                        if (shaping) {
+                            shapedTextOrientations.horizontal[justification] = shaping;
+                            singleLine = shaping.positionedLines.length === 1;
+                        }
+                    }
+                }
+                addVerticalShapingForPointLabelIfNeeded();
+            }
+            else {
+                if (textJustify === 'auto') {
+                    textJustify = getAnchorJustification(textAnchor);
+                }
+                // Horizontal point or line label.
+                const shaping = shapeText(text, args.glyphMap, args.glyphPositions, args.imagePositions, fontstack, maxWidth, lineHeight, textAnchor, textJustify, spacingIfAllowed, textOffset, exports.WritingMode.horizontal, false, symbolPlacement, layoutTextSize, layoutTextSizeThisZoom);
+                if (shaping)
+                    shapedTextOrientations.horizontal[textJustify] = shaping;
+                // Vertical point label (if allowVerticalPlacement is enabled).
+                addVerticalShapingForPointLabelIfNeeded();
+                // Verticalized line label.
+                if (allowsVerticalWritingMode(unformattedText) && textAlongLine && keepUpright) {
+                    shapedTextOrientations.vertical = shapeText(text, args.glyphMap, args.glyphPositions, args.imagePositions, fontstack, maxWidth, lineHeight, textAnchor, textJustify, spacingIfAllowed, textOffset, exports.WritingMode.vertical, false, symbolPlacement, layoutTextSize, layoutTextSizeThisZoom);
+                }
+            }
+        }
+        let shapedIcon;
+        let isSDFIcon = false;
+        if (feature.icon && feature.icon.name) {
+            const image = args.imageMap[feature.icon.name];
+            if (image) {
+                shapedIcon = shapeIcon(args.imagePositions[feature.icon.name], layout.get('icon-offset').evaluate(feature, {}, args.canonical), layout.get('icon-anchor').evaluate(feature, {}, args.canonical));
+                // null/undefined SDF property treated same as default (false)
+                isSDFIcon = !!image.sdf;
+                if (args.bucket.sdfIcons === undefined) {
+                    args.bucket.sdfIcons = isSDFIcon;
+                }
+                else if (args.bucket.sdfIcons !== isSDFIcon) {
+                    warnOnce('Style sheet warning: Cannot mix SDF and non-SDF icons in one buffer');
+                }
+                if (image.pixelRatio !== args.bucket.pixelRatio) {
+                    args.bucket.iconsNeedLinear = true;
+                }
+                else if (layout.get('icon-rotate').constantOr(1) !== 0) {
+                    args.bucket.iconsNeedLinear = true;
+                }
+            }
+        }
+        const shapedText = getDefaultHorizontalShaping(shapedTextOrientations.horizontal) || shapedTextOrientations.vertical;
+        args.bucket.iconsInText = shapedText ? shapedText.iconsInText : false;
+        if (shapedText || shapedIcon) {
+            addFeature(args.bucket, feature, shapedTextOrientations, shapedIcon, args.imageMap, sizes, layoutTextSize, layoutIconSize, textOffset, isSDFIcon, args.canonical);
+        }
+    }
+    if (args.showCollisionBoxes) {
+        args.bucket.generateCollisionDebugBuffers();
+    }
+}
+// Choose the justification that matches the direction of the TextAnchor
+function getAnchorJustification(anchor) {
+    switch (anchor) {
+        case 'right':
+        case 'top-right':
+        case 'bottom-right':
+            return 'right';
+        case 'left':
+        case 'top-left':
+        case 'bottom-left':
+            return 'left';
+    }
+    return 'center';
+}
+/**
+ * Given a feature and its shaped text and icon data, add a 'symbol
+ * instance' for each _possible_ placement of the symbol feature.
+ * (At render timePlaceSymbols#place() selects which of these instances to
+ * show or hide based on collisions with symbols in other layers.)
+ * @private
+ */
+function addFeature(bucket, feature, shapedTextOrientations, shapedIcon, imageMap, sizes, layoutTextSize, layoutIconSize, textOffset, isSDFIcon, canonical) {
+    // To reduce the number of labels that jump around when zooming we need
+    // to use a text-size value that is the same for all zoom levels.
+    // bucket calculates text-size at a high zoom level so that all tiles can
+    // use the same value when calculating anchor positions.
+    let textMaxSize = sizes.textMaxSize.evaluate(feature, {});
+    if (textMaxSize === undefined) {
+        textMaxSize = layoutTextSize;
+    }
+    const layout = bucket.layers[0].layout;
+    const iconOffset = layout.get('icon-offset').evaluate(feature, {}, canonical);
+    const defaultHorizontalShaping = getDefaultHorizontalShaping(shapedTextOrientations.horizontal);
+    const glyphSize = 24, fontScale = layoutTextSize / glyphSize, textBoxScale = bucket.tilePixelRatio * fontScale, textMaxBoxScale = bucket.tilePixelRatio * textMaxSize / glyphSize, iconBoxScale = bucket.tilePixelRatio * layoutIconSize, symbolMinDistance = bucket.tilePixelRatio * layout.get('symbol-spacing'), textPadding = layout.get('text-padding') * bucket.tilePixelRatio, iconPadding = getIconPadding(layout, feature, canonical, bucket.tilePixelRatio), textMaxAngle = layout.get('text-max-angle') / 180 * Math.PI, textAlongLine = layout.get('text-rotation-alignment') !== 'viewport' && layout.get('symbol-placement') !== 'point', iconAlongLine = layout.get('icon-rotation-alignment') === 'map' && layout.get('symbol-placement') !== 'point', symbolPlacement = layout.get('symbol-placement'), textRepeatDistance = symbolMinDistance / 2;
+    const iconTextFit = layout.get('icon-text-fit');
+    let verticallyShapedIcon;
+    // Adjust shaped icon size when icon-text-fit is used.
+    if (shapedIcon && iconTextFit !== 'none') {
+        if (bucket.allowVerticalPlacement && shapedTextOrientations.vertical) {
+            verticallyShapedIcon = fitIconToText(shapedIcon, shapedTextOrientations.vertical, iconTextFit, layout.get('icon-text-fit-padding'), iconOffset, fontScale);
+        }
+        if (defaultHorizontalShaping) {
+            shapedIcon = fitIconToText(shapedIcon, defaultHorizontalShaping, iconTextFit, layout.get('icon-text-fit-padding'), iconOffset, fontScale);
+        }
+    }
+    const addSymbolAtAnchor = (line, anchor) => {
+        if (anchor.x < 0 || anchor.x >= EXTENT || anchor.y < 0 || anchor.y >= EXTENT) {
+            // Symbol layers are drawn across tile boundaries, We filter out symbols
+            // outside our tile boundaries (which may be included in vector tile buffers)
+            // to prevent double-drawing symbols.
+            return;
+        }
+        addSymbol(bucket, anchor, line, shapedTextOrientations, shapedIcon, imageMap, verticallyShapedIcon, bucket.layers[0], bucket.collisionBoxArray, feature.index, feature.sourceLayerIndex, bucket.index, textBoxScale, [textPadding, textPadding, textPadding, textPadding], textAlongLine, textOffset, iconBoxScale, iconPadding, iconAlongLine, iconOffset, feature, sizes, isSDFIcon, canonical, layoutTextSize);
+    };
+    if (symbolPlacement === 'line') {
+        for (const line of clipLine(feature.geometry, 0, 0, EXTENT, EXTENT)) {
+            const anchors = getAnchors(line, symbolMinDistance, textMaxAngle, shapedTextOrientations.vertical || defaultHorizontalShaping, shapedIcon, glyphSize, textMaxBoxScale, bucket.overscaling, EXTENT);
+            for (const anchor of anchors) {
+                const shapedText = defaultHorizontalShaping;
+                if (!shapedText || !anchorIsTooClose(bucket, shapedText.text, textRepeatDistance, anchor)) {
+                    addSymbolAtAnchor(line, anchor);
+                }
+            }
+        }
+    }
+    else if (symbolPlacement === 'line-center') {
+        // No clipping, multiple lines per feature are allowed
+        // "lines" with only one point are ignored as in clipLines
+        for (const line of feature.geometry) {
+            if (line.length > 1) {
+                const anchor = getCenterAnchor(line, textMaxAngle, shapedTextOrientations.vertical || defaultHorizontalShaping, shapedIcon, glyphSize, textMaxBoxScale);
+                if (anchor) {
+                    addSymbolAtAnchor(line, anchor);
+                }
+            }
+        }
+    }
+    else if (feature.type === 'Polygon') {
+        for (const polygon of classifyRings$1(feature.geometry, 0)) {
+            // 16 here represents 2 pixels
+            const poi = findPoleOfInaccessibility(polygon, 16);
+            addSymbolAtAnchor(polygon[0], new Anchor(poi.x, poi.y, 0));
+        }
+    }
+    else if (feature.type === 'LineString') {
+        // https://github.com/mapbox/mapbox-gl-js/issues/3808
+        for (const line of feature.geometry) {
+            addSymbolAtAnchor(line, new Anchor(line[0].x, line[0].y, 0));
+        }
+    }
+    else if (feature.type === 'Point') {
+        for (const points of feature.geometry) {
+            for (const point of points) {
+                addSymbolAtAnchor([point], new Anchor(point.x, point.y, 0));
+            }
+        }
+    }
+}
+function addTextVertices(bucket, anchor, shapedText, imageMap, layer, textAlongLine, feature, textOffset, lineArray, writingMode, placementTypes, placedTextSymbolIndices, placedIconIndex, sizes, canonical) {
+    const glyphQuads = getGlyphQuads(anchor, shapedText, textOffset, layer, textAlongLine, feature, imageMap, bucket.allowVerticalPlacement);
+    const sizeData = bucket.textSizeData;
+    let textSizeData = null;
+    if (sizeData.kind === 'source') {
+        textSizeData = [
+            SIZE_PACK_FACTOR * layer.layout.get('text-size').evaluate(feature, {})
+        ];
+        if (textSizeData[0] > MAX_PACKED_SIZE) {
+            warnOnce(`${bucket.layerIds[0]}: Value for "text-size" is >= ${MAX_GLYPH_ICON_SIZE}. Reduce your "text-size".`);
+        }
+    }
+    else if (sizeData.kind === 'composite') {
+        textSizeData = [
+            SIZE_PACK_FACTOR * sizes.compositeTextSizes[0].evaluate(feature, {}, canonical),
+            SIZE_PACK_FACTOR * sizes.compositeTextSizes[1].evaluate(feature, {}, canonical)
+        ];
+        if (textSizeData[0] > MAX_PACKED_SIZE || textSizeData[1] > MAX_PACKED_SIZE) {
+            warnOnce(`${bucket.layerIds[0]}: Value for "text-size" is >= ${MAX_GLYPH_ICON_SIZE}. Reduce your "text-size".`);
+        }
+    }
+    bucket.addSymbols(bucket.text, glyphQuads, textSizeData, textOffset, textAlongLine, feature, writingMode, anchor, lineArray.lineStartIndex, lineArray.lineLength, placedIconIndex, canonical);
+    // The placedSymbolArray is used at render time in drawTileSymbols
+    // These indices allow access to the array at collision detection time
+    for (const placementType of placementTypes) {
+        placedTextSymbolIndices[placementType] = bucket.text.placedSymbolArray.length - 1;
+    }
+    return glyphQuads.length * 4;
+}
+function getDefaultHorizontalShaping(horizontalShaping) {
+    // We don't care which shaping we get because this is used for collision purposes
+    // and all the justifications have the same collision box
+    for (const justification in horizontalShaping) {
+        return horizontalShaping[justification];
+    }
+    return null;
+}
+/**
+ * Add a single label & icon placement.
+ *
+ * @private
+ */
+function addSymbol(bucket, anchor, line, shapedTextOrientations, shapedIcon, imageMap, verticallyShapedIcon, layer, collisionBoxArray, featureIndex, sourceLayerIndex, bucketIndex, textBoxScale, textPadding, textAlongLine, textOffset, iconBoxScale, iconPadding, iconAlongLine, iconOffset, feature, sizes, isSDFIcon, canonical, layoutTextSize) {
+    const lineArray = bucket.addToLineVertexArray(anchor, line);
+    let textCollisionFeature, iconCollisionFeature, verticalTextCollisionFeature, verticalIconCollisionFeature;
+    let numIconVertices = 0;
+    let numVerticalIconVertices = 0;
+    let numHorizontalGlyphVertices = 0;
+    let numVerticalGlyphVertices = 0;
+    let placedIconSymbolIndex = -1;
+    let verticalPlacedIconSymbolIndex = -1;
+    const placedTextSymbolIndices = {};
+    let key = murmur3$1('');
+    let textOffset0 = 0;
+    let textOffset1 = 0;
+    if (layer._unevaluatedLayout.getValue('text-radial-offset') === undefined) {
+        [textOffset0, textOffset1] = layer.layout.get('text-offset').evaluate(feature, {}, canonical).map(t => t * ONE_EM);
+    }
+    else {
+        textOffset0 = layer.layout.get('text-radial-offset').evaluate(feature, {}, canonical) * ONE_EM;
+        textOffset1 = INVALID_TEXT_OFFSET;
+    }
+    if (bucket.allowVerticalPlacement && shapedTextOrientations.vertical) {
+        const textRotation = layer.layout.get('text-rotate').evaluate(feature, {}, canonical);
+        const verticalTextRotation = textRotation + 90.0;
+        const verticalShaping = shapedTextOrientations.vertical;
+        verticalTextCollisionFeature = new CollisionFeature(collisionBoxArray, anchor, featureIndex, sourceLayerIndex, bucketIndex, verticalShaping, textBoxScale, textPadding, textAlongLine, verticalTextRotation);
+        if (verticallyShapedIcon) {
+            verticalIconCollisionFeature = new CollisionFeature(collisionBoxArray, anchor, featureIndex, sourceLayerIndex, bucketIndex, verticallyShapedIcon, iconBoxScale, iconPadding, textAlongLine, verticalTextRotation);
+        }
+    }
+    //Place icon first, so text can have a reference to its index in the placed symbol array.
+    //Text symbols can lazily shift at render-time because of variable anchor placement.
+    //If the style specifies an `icon-text-fit` then the icon would have to shift along with it.
+    // For more info check `updateVariableAnchors` in `draw_symbol.js` .
+    if (shapedIcon) {
+        const iconRotate = layer.layout.get('icon-rotate').evaluate(feature, {});
+        const hasIconTextFit = layer.layout.get('icon-text-fit') !== 'none';
+        const iconQuads = getIconQuads(shapedIcon, iconRotate, isSDFIcon, hasIconTextFit);
+        const verticalIconQuads = verticallyShapedIcon ? getIconQuads(verticallyShapedIcon, iconRotate, isSDFIcon, hasIconTextFit) : undefined;
+        iconCollisionFeature = new CollisionFeature(collisionBoxArray, anchor, featureIndex, sourceLayerIndex, bucketIndex, shapedIcon, iconBoxScale, iconPadding, /*align boxes to line*/ false, iconRotate);
+        numIconVertices = iconQuads.length * 4;
+        const sizeData = bucket.iconSizeData;
+        let iconSizeData = null;
+        if (sizeData.kind === 'source') {
+            iconSizeData = [
+                SIZE_PACK_FACTOR * layer.layout.get('icon-size').evaluate(feature, {})
+            ];
+            if (iconSizeData[0] > MAX_PACKED_SIZE) {
+                warnOnce(`${bucket.layerIds[0]}: Value for "icon-size" is >= ${MAX_GLYPH_ICON_SIZE}. Reduce your "icon-size".`);
+            }
+        }
+        else if (sizeData.kind === 'composite') {
+            iconSizeData = [
+                SIZE_PACK_FACTOR * sizes.compositeIconSizes[0].evaluate(feature, {}, canonical),
+                SIZE_PACK_FACTOR * sizes.compositeIconSizes[1].evaluate(feature, {}, canonical)
+            ];
+            if (iconSizeData[0] > MAX_PACKED_SIZE || iconSizeData[1] > MAX_PACKED_SIZE) {
+                warnOnce(`${bucket.layerIds[0]}: Value for "icon-size" is >= ${MAX_GLYPH_ICON_SIZE}. Reduce your "icon-size".`);
+            }
+        }
+        bucket.addSymbols(bucket.icon, iconQuads, iconSizeData, iconOffset, iconAlongLine, feature, exports.WritingMode.none, anchor, lineArray.lineStartIndex, lineArray.lineLength, 
+        // The icon itself does not have an associated symbol since the text isnt placed yet
+        -1, canonical);
+        placedIconSymbolIndex = bucket.icon.placedSymbolArray.length - 1;
+        if (verticalIconQuads) {
+            numVerticalIconVertices = verticalIconQuads.length * 4;
+            bucket.addSymbols(bucket.icon, verticalIconQuads, iconSizeData, iconOffset, iconAlongLine, feature, exports.WritingMode.vertical, anchor, lineArray.lineStartIndex, lineArray.lineLength, 
+            // The icon itself does not have an associated symbol since the text isnt placed yet
+            -1, canonical);
+            verticalPlacedIconSymbolIndex = bucket.icon.placedSymbolArray.length - 1;
+        }
+    }
+    const justifications = Object.keys(shapedTextOrientations.horizontal);
+    for (const justification of justifications) {
+        const shaping = shapedTextOrientations.horizontal[justification];
+        if (!textCollisionFeature) {
+            key = murmur3$1(shaping.text);
+            const textRotate = layer.layout.get('text-rotate').evaluate(feature, {}, canonical);
+            // As a collision approximation, we can use either the vertical or any of the horizontal versions of the feature
+            // We're counting on all versions having similar dimensions
+            textCollisionFeature = new CollisionFeature(collisionBoxArray, anchor, featureIndex, sourceLayerIndex, bucketIndex, shaping, textBoxScale, textPadding, textAlongLine, textRotate);
+        }
+        const singleLine = shaping.positionedLines.length === 1;
+        numHorizontalGlyphVertices += addTextVertices(bucket, anchor, shaping, imageMap, layer, textAlongLine, feature, textOffset, lineArray, shapedTextOrientations.vertical ? exports.WritingMode.horizontal : exports.WritingMode.horizontalOnly, singleLine ? justifications : [justification], placedTextSymbolIndices, placedIconSymbolIndex, sizes, canonical);
+        if (singleLine) {
+            break;
+        }
+    }
+    if (shapedTextOrientations.vertical) {
+        numVerticalGlyphVertices += addTextVertices(bucket, anchor, shapedTextOrientations.vertical, imageMap, layer, textAlongLine, feature, textOffset, lineArray, exports.WritingMode.vertical, ['vertical'], placedTextSymbolIndices, verticalPlacedIconSymbolIndex, sizes, canonical);
+    }
+    const textBoxStartIndex = textCollisionFeature ? textCollisionFeature.boxStartIndex : bucket.collisionBoxArray.length;
+    const textBoxEndIndex = textCollisionFeature ? textCollisionFeature.boxEndIndex : bucket.collisionBoxArray.length;
+    const verticalTextBoxStartIndex = verticalTextCollisionFeature ? verticalTextCollisionFeature.boxStartIndex : bucket.collisionBoxArray.length;
+    const verticalTextBoxEndIndex = verticalTextCollisionFeature ? verticalTextCollisionFeature.boxEndIndex : bucket.collisionBoxArray.length;
+    const iconBoxStartIndex = iconCollisionFeature ? iconCollisionFeature.boxStartIndex : bucket.collisionBoxArray.length;
+    const iconBoxEndIndex = iconCollisionFeature ? iconCollisionFeature.boxEndIndex : bucket.collisionBoxArray.length;
+    const verticalIconBoxStartIndex = verticalIconCollisionFeature ? verticalIconCollisionFeature.boxStartIndex : bucket.collisionBoxArray.length;
+    const verticalIconBoxEndIndex = verticalIconCollisionFeature ? verticalIconCollisionFeature.boxEndIndex : bucket.collisionBoxArray.length;
+    // Check if runtime collision circles should be used for any of the collision features.
+    // It is enough to choose the tallest feature shape as circles are always placed on a line.
+    // All measurements are in glyph metrics and later converted into pixels using proper font size "layoutTextSize"
+    let collisionCircleDiameter = -1;
+    const getCollisionCircleHeight = (feature, prevHeight) => {
+        if (feature && feature.circleDiameter)
+            return Math.max(feature.circleDiameter, prevHeight);
+        return prevHeight;
+    };
+    collisionCircleDiameter = getCollisionCircleHeight(textCollisionFeature, collisionCircleDiameter);
+    collisionCircleDiameter = getCollisionCircleHeight(verticalTextCollisionFeature, collisionCircleDiameter);
+    collisionCircleDiameter = getCollisionCircleHeight(iconCollisionFeature, collisionCircleDiameter);
+    collisionCircleDiameter = getCollisionCircleHeight(verticalIconCollisionFeature, collisionCircleDiameter);
+    const useRuntimeCollisionCircles = (collisionCircleDiameter > -1) ? 1 : 0;
+    // Convert circle collision height into pixels
+    if (useRuntimeCollisionCircles)
+        collisionCircleDiameter *= layoutTextSize / ONE_EM;
+    if (bucket.glyphOffsetArray.length >= SymbolBucket.MAX_GLYPHS)
+        warnOnce('Too many glyphs being rendered in a tile. See https://github.com/mapbox/mapbox-gl-js/issues/2907');
+    if (feature.sortKey !== undefined) {
+        bucket.addToSortKeyRanges(bucket.symbolInstances.length, feature.sortKey);
+    }
+    bucket.symbolInstances.emplaceBack(anchor.x, anchor.y, placedTextSymbolIndices.right >= 0 ? placedTextSymbolIndices.right : -1, placedTextSymbolIndices.center >= 0 ? placedTextSymbolIndices.center : -1, placedTextSymbolIndices.left >= 0 ? placedTextSymbolIndices.left : -1, placedTextSymbolIndices.vertical || -1, placedIconSymbolIndex, verticalPlacedIconSymbolIndex, key, textBoxStartIndex, textBoxEndIndex, verticalTextBoxStartIndex, verticalTextBoxEndIndex, iconBoxStartIndex, iconBoxEndIndex, verticalIconBoxStartIndex, verticalIconBoxEndIndex, featureIndex, numHorizontalGlyphVertices, numVerticalGlyphVertices, numIconVertices, numVerticalIconVertices, useRuntimeCollisionCircles, 0, textBoxScale, textOffset0, textOffset1, collisionCircleDiameter);
+}
+function anchorIsTooClose(bucket, text, repeatDistance, anchor) {
+    const compareText = bucket.compareText;
+    if (!(text in compareText)) {
+        compareText[text] = [];
+    }
+    else {
+        const otherAnchors = compareText[text];
+        for (let k = otherAnchors.length - 1; k >= 0; k--) {
+            if (anchor.dist(otherAnchors[k]) < repeatDistance) {
+                // If it's within repeatDistance of one anchor, stop looking
+                return true;
+            }
+        }
+    }
+    // If anchor is not within repeatDistance of any other anchor, add to array
+    compareText[text].push(anchor);
+    return false;
+}
 
 function sortKD(ids, coords, nodeSize, left, right, depth) {
     if (right - left <= nodeSize) return;
@@ -29707,8 +30914,10 @@ exports.PerformanceMarkers = void 0;
 })(exports.PerformanceMarkers || (exports.PerformanceMarkers = {}));
 let lastFrameTime = null;
 let frameTimes = [];
-const minFramerateTarget = 30;
+const minFramerateTarget = 60;
 const frameTimeTarget = 1000 / minFramerateTarget;
+const loadTimeKey = 'loadTime';
+const fullLoadTimeKey = 'fullLoadTime';
 const PerformanceUtils = {
     mark(marker) {
         performance.mark(marker);
@@ -29724,17 +30933,17 @@ const PerformanceUtils = {
     clearMetrics() {
         lastFrameTime = null;
         frameTimes = [];
-        performance.clearMeasures('loadTime');
-        performance.clearMeasures('fullLoadTime');
+        performance.clearMeasures(loadTimeKey);
+        performance.clearMeasures(fullLoadTimeKey);
         for (const marker in exports.PerformanceMarkers) {
             performance.clearMarks(exports.PerformanceMarkers[marker]);
         }
     },
     getPerformanceMetrics() {
-        performance.measure('loadTime', exports.PerformanceMarkers.create, exports.PerformanceMarkers.load);
-        performance.measure('fullLoadTime', exports.PerformanceMarkers.create, exports.PerformanceMarkers.fullLoad);
-        const loadTime = performance.getEntriesByName('loadTime')[0].duration;
-        const fullLoadTime = performance.getEntriesByName('fullLoadTime')[0].duration;
+        performance.measure(loadTimeKey, exports.PerformanceMarkers.create, exports.PerformanceMarkers.load);
+        performance.measure(fullLoadTimeKey, exports.PerformanceMarkers.create, exports.PerformanceMarkers.fullLoad);
+        const loadTime = performance.getEntriesByName(loadTimeKey)[0].duration;
+        const fullLoadTime = performance.getEntriesByName(fullLoadTimeKey)[0].duration;
         const totalFrames = frameTimes.length;
         const avgFrameTime = frameTimes.reduce((prev, curr) => prev + curr, 0) / totalFrames / 1000;
         const fps = 1 / avgFrameTime;
@@ -29749,7 +30958,8 @@ const PerformanceUtils = {
             loadTime,
             fullLoadTime,
             fps,
-            percentDroppedFrames
+            percentDroppedFrames,
+            totalFrames
         };
     }
 };
@@ -29810,20 +31020,21 @@ exports.KDBush = KDBush;
 exports.LineBucket = LineBucket;
 exports.LineStripIndexArray = LineStripIndexArray;
 exports.LngLat = LngLat;
-exports.LngLatBounds = LngLatBounds$1;
 exports.MercatorCoordinate = MercatorCoordinate;
 exports.ONE_EM = ONE_EM;
 exports.OverscaledTileID = OverscaledTileID;
 exports.PerformanceUtils = PerformanceUtils;
+exports.Point = Point$2;
 exports.Pos3dArray = Pos3dArray;
 exports.PosArray = PosArray;
 exports.Properties = Properties;
+exports.Protobuf = Protobuf;
 exports.QuadTriangleArray = QuadTriangleArray;
 exports.RGBAImage = RGBAImage;
 exports.RasterBoundsArray = RasterBoundsArray;
 exports.RequestPerformance = RequestPerformance;
 exports.SegmentVector = SegmentVector;
-exports.SymbolBucket = SymbolBucket$1;
+exports.SymbolBucket = SymbolBucket;
 exports.Transitionable = Transitionable;
 exports.TriangleIndexArray = TriangleIndexArray;
 exports.Uniform1f = Uniform1f;
@@ -29843,7 +31054,7 @@ exports.arrayBufferToImageBitmap = arrayBufferToImageBitmap;
 exports.asyncAll = asyncAll;
 exports.bezier = bezier$1;
 exports.bindAll = bindAll;
-exports.clamp = clamp;
+exports.clamp = clamp$1;
 exports.clipLine = clipLine;
 exports.clone = clone$5;
 exports.clone$1 = clone$9;
@@ -29859,12 +31070,15 @@ exports.createFilter = createFilter;
 exports.createLayout = createLayout;
 exports.createStyleLayer = createStyleLayer;
 exports.cross = cross$2;
-exports.deepEqual = deepEqual;
+exports.deepEqual = deepEqual$1;
+exports.derefLayers = derefLayers;
+exports.diffStyles = diffStyles;
 exports.dot = dot$5;
 exports.dot$1 = dot$4;
 exports.earthRadius = earthRadius;
 exports.ease = ease;
 exports.emitValidationErrors = emitValidationErrors;
+exports.emptyStyle = emptyStyle;
 exports.equals = equals$6;
 exports.evaluateSizeForFeature = evaluateSizeForFeature;
 exports.evaluateSizeForZoom = evaluateSizeForZoom;
@@ -29873,17 +31087,21 @@ exports.evented = evented;
 exports.exported = exported;
 exports.extend = extend;
 exports.filterObject = filterObject;
+exports.findLineIntersection = findLineIntersection;
 exports.fromRotation = fromRotation$2;
 exports.fromScaling = fromScaling;
 exports.getAnchorAlignment = getAnchorAlignment;
 exports.getAnchorJustification = getAnchorJustification;
 exports.getArrayBuffer = getArrayBuffer;
+exports.getDefaultExportFromCjs = getDefaultExportFromCjs;
 exports.getJSON = getJSON;
 exports.getOverlapMode = getOverlapMode;
 exports.getRTLTextPluginStatus = getRTLTextPluginStatus;
 exports.getReferrer = getReferrer;
 exports.getVideo = getVideo;
+exports.groupByLayout = groupByLayout;
 exports.identity = identity$2;
+exports.interpolate = interpolate;
 exports.invert = invert$2;
 exports.isImageBitmap = isImageBitmap;
 exports.isSafari = isSafari;
@@ -29900,7 +31118,7 @@ exports.mul$1 = mul$3;
 exports.multiply = multiply$5;
 exports.nextPowerOfTwo = nextPowerOfTwo;
 exports.normalize = normalize$4;
-exports.number = number;
+exports.operations = operations;
 exports.ortho = ortho;
 exports.parseCacheControl = parseCacheControl;
 exports.parseGlyphPbf = parseGlyphPbf;
@@ -29912,7 +31130,6 @@ exports.plugin = plugin;
 exports.pointGeometry = pointGeometry;
 exports.polygonIntersectsPolygon = polygonIntersectsPolygon;
 exports.potpack = potpack;
-exports.refProperties = refProperties;
 exports.register = register;
 exports.registerForPluginStateChange = registerForPluginStateChange;
 exports.renderColorRamp = renderColorRamp;
@@ -29922,7 +31139,6 @@ exports.rotateZ = rotateZ$3;
 exports.scale = scale$5;
 exports.scale$1 = scale$4;
 exports.setRTLTextPlugin = setRTLTextPlugin;
-exports.spec = spec;
 exports.sphericalToCartesian = sphericalToCartesian;
 exports.sqrLen = sqrLen;
 exports.sub = sub$2;
@@ -29934,6 +31150,7 @@ exports.translate = translate$1;
 exports.triggerPluginCompletionEvent = triggerPluginCompletionEvent;
 exports.unicodeBlockLookup = unicodeBlockLookup;
 exports.uniqueId = uniqueId;
+exports.v8Spec = v8Spec;
 exports.validateCustomStyleLayer = validateCustomStyleLayer;
 exports.validateLight = validateLight;
 exports.validateStyle = validateStyle;
@@ -29944,66 +31161,6 @@ exports.wrap = wrap;
 }));
 
 define(['./shared'], (function (performance) { 'use strict';
-
-function stringify(obj) {
-    const type = typeof obj;
-    if (type === 'number' || type === 'boolean' || type === 'string' || obj === undefined || obj === null)
-        return JSON.stringify(obj);
-    if (Array.isArray(obj)) {
-        let str = '[';
-        for (const val of obj) {
-            str += `${stringify(val)},`;
-        }
-        return `${str}]`;
-    }
-    const keys = Object.keys(obj).sort();
-    let str = '{';
-    for (let i = 0; i < keys.length; i++) {
-        str += `${JSON.stringify(keys[i])}:${stringify(obj[keys[i]])},`;
-    }
-    return `${str}}`;
-}
-function getKey(layer) {
-    let key = '';
-    for (const k of performance.refProperties) {
-        key += `/${stringify(layer[k])}`;
-    }
-    return key;
-}
-/**
- * Given an array of layers, return an array of arrays of layers where all
- * layers in each group have identical layout-affecting properties. These
- * are the properties that were formerly used by explicit `ref` mechanism
- * for layers: 'type', 'source', 'source-layer', 'minzoom', 'maxzoom',
- * 'filter', and 'layout'.
- *
- * The input is not modified. The output layers are references to the
- * input layers.
- *
- * @private
- * @param {Array<Layer>} layers
- * @param {Object} [cachedKeys] - an object to keep already calculated keys.
- * @returns {Array<Array<Layer>>}
- */
-function groupByLayout(layers, cachedKeys) {
-    const groups = {};
-    for (let i = 0; i < layers.length; i++) {
-        const k = (cachedKeys && cachedKeys[layers[i].id]) || getKey(layers[i]);
-        // update the cache if there is one
-        if (cachedKeys)
-            cachedKeys[layers[i].id] = k;
-        let group = groups[k];
-        if (!group) {
-            group = groups[k] = [];
-        }
-        group.push(layers[i]);
-    }
-    const result = [];
-    for (const k in groups) {
-        result.push(groups[k]);
-    }
-    return result;
-}
 
 class StyleLayerIndex {
     constructor(layerConfigs) {
@@ -30031,7 +31188,7 @@ class StyleLayerIndex {
             delete this._layers[id];
         }
         this.familiesBySource = {};
-        const groups = groupByLayout(Object.values(this._layerConfigs), this.keyCache);
+        const groups = performance.groupByLayout(Object.values(this._layerConfigs), this.keyCache);
         for (const layerConfigs of groups) {
             const layers = layerConfigs.map((layerConfig) => this._layers[layerConfig.id]);
             const layer = layers[0];
@@ -30272,7 +31429,7 @@ function loadVectorTile(params, callback) {
         }
         else if (data) {
             callback(null, {
-                vectorTile: new performance.vectorTile.VectorTile(new performance.pbf(data)),
+                vectorTile: new performance.vectorTile.VectorTile(new performance.Protobuf(data)),
                 rawData: data,
                 cacheControl,
                 expires
@@ -30496,6 +31653,8 @@ function rewindRing(ring, dir) {
     if (area + err >= 0 !== !!dir) ring.reverse();
 }
 
+var rewind$2 = /*@__PURE__*/performance.getDefaultExportFromCjs(geojsonRewind);
+
 const toGeoJSON = performance.vectorTile.VectorTileFeature.prototype.toGeoJSON;
 let FeatureWrapper$1 = class FeatureWrapper {
     constructor(feature) {
@@ -30517,7 +31676,7 @@ let FeatureWrapper$1 = class FeatureWrapper {
         if (this._feature.type === 1) {
             const geometry = [];
             for (const point of this._feature.geometry) {
-                geometry.push([new performance.pointGeometry(point[0], point[1])]);
+                geometry.push([new performance.Point(point[0], point[1])]);
             }
             return geometry;
         }
@@ -30526,7 +31685,7 @@ let FeatureWrapper$1 = class FeatureWrapper {
             for (const ring of this._feature.geometry) {
                 const newRing = [];
                 for (const point of ring) {
-                    newRing.push(new performance.pointGeometry(point[0], point[1]));
+                    newRing.push(new performance.Point(point[0], point[1]));
                 }
                 geometry.push(newRing);
             }
@@ -30550,11 +31709,7 @@ let GeoJSONWrapper$2 = class GeoJSONWrapper {
     }
 };
 
-var vtPbfExports = {};
-var vtPbf = {
-  get exports(){ return vtPbfExports; },
-  set exports(v){ vtPbfExports = v; },
-};
+var vtPbf$1 = {exports: {}};
 
 'use strict';
 
@@ -30624,13 +31779,17 @@ FeatureWrapper.prototype.bbox = function () {
 
 FeatureWrapper.prototype.toGeoJSON = VectorTileFeature.prototype.toGeoJSON;
 
+var geojson_wrapper$1 = /*@__PURE__*/performance.getDefaultExportFromCjs(geojson_wrapper);
+
+var vtPbf = vtPbf$1.exports;
+
 var Pbf = performance.pbf;
 var GeoJSONWrapper = geojson_wrapper;
 
-vtPbf.exports = fromVectorTileJs;
-var fromVectorTileJs_1 = vtPbfExports.fromVectorTileJs = fromVectorTileJs;
-var fromGeojsonVt_1 = vtPbfExports.fromGeojsonVt = fromGeojsonVt;
-var GeoJSONWrapper_1 = vtPbfExports.GeoJSONWrapper = GeoJSONWrapper;
+vtPbf$1.exports = fromVectorTileJs;
+var fromVectorTileJs_1 = vtPbf$1.exports.fromVectorTileJs = fromVectorTileJs;
+var fromGeojsonVt_1 = vtPbf$1.exports.fromGeojsonVt = fromGeojsonVt;
+var GeoJSONWrapper_1 = vtPbf$1.exports.GeoJSONWrapper = GeoJSONWrapper;
 
 /**
  * Serialize a vector-tile-js-created tile to pbf
@@ -30803,6 +31962,9 @@ function writeValue (value, pbf) {
     }
   }
 }
+
+var vtPbfExports = vtPbf$1.exports;
+var vtpbf = /*@__PURE__*/performance.getDefaultExportFromCjs(vtPbfExports);
 
 const defaultOptions = {
     minZoom: 0,   // min zoom to generate clusters on
@@ -32220,7 +33382,7 @@ function loadGeoJSONTile(params, callback) {
     // Encode the geojson-vt tile into binary vector tile form.  This
     // is a convenience that allows `FeatureIndex` to operate the same way
     // across `VectorTileSource` and `GeoJSONSource` data.
-    let pbf = vtPbfExports(geojsonWrapper);
+    let pbf = vtpbf(geojsonWrapper);
     if (pbf.byteOffset !== 0 || pbf.byteLength !== pbf.buffer.byteLength) {
         // Compatibility with node Buffer (https://github.com/mapbox/pbf/issues/35)
         pbf = new Uint8Array(pbf);
@@ -32339,7 +33501,7 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
                 return callback(new Error(`Input data given to '${params.source}' is not a valid GeoJSON object.`));
             }
             else {
-                geojsonRewind(data, true);
+                rewind$2(data, true);
                 try {
                     if (params.filter) {
                         const compiled = performance.createExpression(params.filter, { type: 'boolean', 'property-type': 'data-driven', overridable: false, transition: false });
@@ -32812,7 +33974,7 @@ function isNotIE() {
 
 var name = "maplibre-gl";
 var description = "BSD licensed community fork of mapbox-gl, a WebGL interactive maps library";
-var version$2 = "3.0.0-pre.4";
+var version$2 = "3.0.0-pre.5";
 var main = "dist/maplibre-gl.js";
 var style = "dist/maplibre-gl.css";
 var license = "BSD-3-Clause";
@@ -32832,12 +33994,12 @@ var dependencies = {
 	"@mapbox/unitbezier": "^0.0.1",
 	"@mapbox/vector-tile": "^1.3.1",
 	"@mapbox/whoots-js": "^3.1.0",
+	"@maplibre/maplibre-gl-style-spec": "^19.0.1",
 	"@types/geojson": "^7946.0.10",
 	"@types/kdbush": "^3.0.2",
 	"@types/mapbox__point-geometry": "^0.1.2",
 	"@types/mapbox__vector-tile": "^1.3.0",
 	"@types/pbf": "^3.0.2",
-	csscolorparser: "~1.0.3",
 	earcut: "^2.2.4",
 	"geojson-vt": "^3.2.1",
 	"gl-matrix": "^3.4.3",
@@ -32854,90 +34016,90 @@ var dependencies = {
 var devDependencies = {
 	"@mapbox/mapbox-gl-rtl-text": "^0.2.3",
 	"@mapbox/mvt-fixtures": "^3.10.0",
-	"@rollup/plugin-commonjs": "^24.0.1",
+	"@rollup/plugin-commonjs": "^24.1.0",
 	"@rollup/plugin-json": "^6.0.0",
-	"@rollup/plugin-node-resolve": "^15.0.1",
+	"@rollup/plugin-node-resolve": "^15.0.2",
 	"@rollup/plugin-replace": "^5.0.2",
 	"@rollup/plugin-strip": "^3.0.2",
-	"@rollup/plugin-terser": "^0.4.0",
-	"@rollup/plugin-typescript": "^11.0.0",
+	"@rollup/plugin-terser": "^0.4.1",
+	"@rollup/plugin-typescript": "^11.1.0",
 	"@types/benchmark": "^2.1.2",
 	"@types/cssnano": "^5.0.0",
 	"@types/d3": "^7.4.0",
-	"@types/diff": "^5.0.2",
+	"@types/diff": "^5.0.3",
 	"@types/earcut": "^2.1.1",
-	"@types/eslint": "^8.21.0",
+	"@types/eslint": "^8.37.0",
 	"@types/gl": "^6.0.2",
-	"@types/glob": "^8.0.1",
-	"@types/jest": "^29.2.5",
-	"@types/jsdom": "^20.0.0",
+	"@types/glob": "^8.1.0",
+	"@types/jest": "^29.5.0",
+	"@types/jsdom": "^21.1.1",
 	"@types/minimist": "^1.2.2",
 	"@types/murmurhash-js": "^1.0.3",
 	"@types/nise": "^1.4.1",
-	"@types/node": "^18.11.19",
+	"@types/node": "^18.15.11",
 	"@types/offscreencanvas": "^2019.7.0",
 	"@types/pixelmatch": "^5.2.4",
 	"@types/pngjs": "^6.0.1",
-	"@types/react": "^18.0.27",
-	"@types/react-dom": "^18.0.10",
+	"@types/react": "^18.0.35",
+	"@types/react-dom": "^18.0.11",
 	"@types/request": "^2.48.8",
 	"@types/shuffle-seed": "^1.1.0",
 	"@types/supercluster": "^7.1.0",
 	"@types/window-or-global": "^1.0.4",
-	"@typescript-eslint/eslint-plugin": "^5.50.0",
-	"@typescript-eslint/parser": "^5.51.0",
+	"@typescript-eslint/eslint-plugin": "^5.58.0",
+	"@typescript-eslint/parser": "^5.58.0",
 	address: "^1.2.2",
 	benchmark: "^2.1.4",
-	canvas: "^2.10.2",
-	cssnano: "^5.1.14",
-	d3: "^7.8.1",
+	canvas: "^2.11.2",
+	cssnano: "^6.0.0",
+	d3: "^7.8.4",
 	"d3-queue": "^3.0.7",
 	diff: "^5.1.0",
 	documentation: "14.0.1",
-	"dts-bundle-generator": "^7.2.0",
-	eslint: "^8.33.0",
+	"dts-bundle-generator": "^8.0.1",
+	eslint: "^8.38.0",
 	"eslint-config-mourner": "^3.0.0",
 	"eslint-plugin-html": "^7.1.0",
-	"eslint-plugin-import": "^2.27.4",
+	"eslint-plugin-import": "^2.27.5",
 	"eslint-plugin-jest": "^27.2.1",
-	"eslint-plugin-jsdoc": "^39.6.4",
+	"eslint-plugin-jsdoc": "^41.1.2",
 	"eslint-plugin-react": "^7.32.2",
 	gl: "^6.0.2",
-	glob: "^8.1.0",
-	"is-builtin-module": "^3.2.0",
-	jest: "^29.3.1",
-	"jest-canvas-mock": "^2.4.0",
-	"jest-environment-jsdom": "^29.3.1",
-	jsdom: "^21.1.0",
+	glob: "^10.1.0",
+	"is-builtin-module": "^3.2.1",
+	jest: "^29.5.0",
+	"jest-canvas-mock": "^2.5.0",
+	"jest-environment-jsdom": "^29.5.0",
+	jsdom: "^21.1.1",
 	"json-stringify-pretty-compact": "^4.0.0",
-	minimist: "^1.2.7",
+	minimist: "^1.2.8",
 	"mock-geolocation": "^1.0.11",
 	nise: "^5.1.4",
 	"node-plantuml": "^0.9.0",
 	"npm-font-open-sans": "^1.1.0",
 	"npm-run-all": "^4.1.5",
-	"pdf-merger-js": "^4.2.0",
+	"pdf-merger-js": "^4.3.0",
 	pixelmatch: "^5.3.0",
-	playwright: "^1.30.0",
-	pngjs: "^6.0.0",
-	postcss: "^8.4.21",
+	playwright: "^1.32.3",
+	pngjs: "^7.0.0",
+	postcss: "^8.4.22",
 	"postcss-cli": "^10.1.0",
-	"postcss-inline-svg": "^5.0.0",
+	"postcss-inline-svg": "^6.0.0",
 	"pretty-bytes": "^6.1.0",
 	react: "^18.2.0",
 	"react-dom": "^18.2.0",
-	rollup: "^3.14.0",
+	rollup: "^3.20.4",
 	"rollup-plugin-sourcemaps": "^0.6.3",
 	rw: "^1.3.3",
-	semver: "^7.3.8",
+	semver: "^7.4.0",
 	"shuffle-seed": "^1.1.6",
 	"source-map-explorer": "^2.5.3",
 	st: "^3.0.0",
-	stylelint: "^14.16.1",
-	"stylelint-config-standard": "^29.0.0",
-	"ts-jest": "^29.0.5",
+	stylelint: "^15.5.0",
+	"stylelint-config-standard": "^33.0.0",
+	"ts-jest": "^29.1.0",
 	"ts-node": "^10.9.1",
-	typescript: "^4.9.5"
+	typescript: "^5.0.4"
 };
 var overrides = {
 	"postcss-inline-svg": {
@@ -32952,16 +34114,14 @@ var scripts = {
 	"generate-shaders": "ts-node build/generate-shaders.ts",
 	"generate-struct-arrays": "ts-node build/generate-struct-arrays.ts",
 	"generate-style-code": "ts-node build/generate-style-code.ts",
-	"generate-style-spec": "ts-node build/generate-style-spec.ts",
 	"generate-typings": "ts-node build/generate-typings.ts",
-	"build-dist": "npm run generate-typings && npm run build-dev && npm run build-prod && npm run build-csp && npm run build-csp-dev && npm run build-css",
+	"build-dist": "run-p --print-label generate-typings build-dev build-prod build-csp build-csp-dev build-css",
 	"build-dev": "rollup --configPlugin @rollup/plugin-typescript -c --environment BUILD:dev",
 	"watch-dev": "rollup --configPlugin @rollup/plugin-typescript -c --environment BUILD:dev --watch",
 	"build-prod": "rollup --configPlugin @rollup/plugin-typescript -c --environment BUILD:production",
 	"build-csp": "rollup --configPlugin @rollup/plugin-typescript -c rollup.config.csp.ts",
 	"build-csp-dev": "rollup --configPlugin @rollup/plugin-typescript -c rollup.config.csp.ts --environment BUILD:dev",
 	"build-css": "postcss -o dist/maplibre-gl.css src/css/maplibre-gl.css",
-	"build-style-spec": "rollup --configPlugin @rollup/plugin-typescript -c rollup.config.style-spec.ts",
 	"build-diagrams": "cd docs/diagrams; ls *.plantuml | xargs -I {} puml generate --svg {} -o {}.svg",
 	"watch-css": "postcss --watch -o dist/maplibre-gl.css src/css/maplibre-gl.css",
 	"build-benchmarks": "npm run build-dev && rollup --configPlugin @rollup/plugin-typescript -c test/bench/rollup_config_benchmarks.ts",
@@ -32980,7 +34140,7 @@ var scripts = {
 	"test-render": "ts-node test/integration/render/run_render_tests.ts",
 	"test-unit": "jest --selectProjects=unit",
 	"test-watch-roots": "jest --watch",
-	codegen: "npm run generate-style-code && npm run generate-struct-arrays && npm run generate-style-spec && npm run generate-shaders",
+	codegen: "npm run generate-style-code && npm run generate-struct-arrays && npm run generate-shaders",
 	benchmark: "ts-node test/bench/run-benchmarks.ts",
 	"gl-stats": "ts-node test/bench/gl-stats.ts",
 	prepare: "npm run generate-dist-package && npm run codegen",
@@ -33081,13 +34241,13 @@ class DOM {
     }
     static mousePos(el, e) {
         const rect = el.getBoundingClientRect();
-        return new performance.pointGeometry(e.clientX - rect.left - el.clientLeft, e.clientY - rect.top - el.clientTop);
+        return new performance.Point(e.clientX - rect.left - el.clientLeft, e.clientY - rect.top - el.clientTop);
     }
     static touchPos(el, touches) {
         const rect = el.getBoundingClientRect();
         const points = [];
         for (let i = 0; i < touches.length; i++) {
-            points.push(new performance.pointGeometry(touches[i].clientX - rect.left - el.clientLeft, touches[i].clientY - rect.top - el.clientTop));
+            points.push(new performance.Point(touches[i].clientX - rect.left - el.clientLeft, touches[i].clientY - rect.top - el.clientTop));
         }
         return points;
     }
@@ -33265,13 +34425,17 @@ var ImageRequest;
             performance.arrayBufferToImage(data, callback);
         }
     };
-    const doArrayRequest = (itemInQueue) => {
+    const doImageRequest = (itemInQueue) => {
         const { requestParameters, callback } = itemInQueue;
         // request the image with XHR to work around caching issues
         // see https://github.com/mapbox/mapbox-gl-js/issues/1470
-        return performance.getArrayBuffer(requestParameters, (err, data, cacheControl, expires) => {
+        return performance.makeRequest(performance.extend(requestParameters, { type: 'image' }), (err, data, cacheControl, expires) => {
             if (err) {
                 callback(err);
+            }
+            else if (data instanceof HTMLImageElement || data instanceof ImageBitmap) {
+                // User using addProtocol can directly return HTMLImageElement/ImageBitmap type
+                callback(null, data);
             }
             else if (data) {
                 const decoratedCallback = (imgErr, imgResult) => {
@@ -33295,7 +34459,7 @@ var ImageRequest;
     };
     /**
      * Process some number of items in the image request queue.
-     * @param {number} maxImageRequests The maximum number of request items to process. By default, up to {@link Config.MAX_PARALLEL_IMAGE_REQUESTS} will be procesed.
+     * @param {number} maxImageRequests The maximum number of request items to process. By default, up to {@link Config.MAX_PARALLEL_IMAGE_REQUESTS} will be processed.
      * @returns {number} The number of items remaining in the queue.
      */
     ImageRequest.processQueue = (maxImageRequests = 0) => {
@@ -33317,7 +34481,7 @@ var ImageRequest;
             if (topItemInQueue.cancelled) {
                 continue;
             }
-            const innerRequest = doArrayRequest(topItemInQueue);
+            const innerRequest = doImageRequest(topItemInQueue);
             currentParallelImageRequests++;
             topItemInQueue.innerRequest = innerRequest;
             topItemInQueue.cancel = () => cancelRequest(topItemInQueue);
@@ -33382,79 +34546,87 @@ function formatUrl(obj) {
 /**
  * Takes a SpriteSpecification value and returns it in its array form. If `undefined` is passed as an input value, an
  * empty array is returned.
- *
+ * duplicated entries with identical id/url will be removed in returned array
  * @param [sprite] {SpriteSpecification} optional sprite to coerce
  * @returns {Array} an empty array in case `undefined` is passed; id-url pairs otherwise
  */
 function coerceSpriteToArray(sprite) {
-    return typeof sprite === 'string' ? [{ id: 'default', url: sprite }] : (sprite !== null && sprite !== void 0 ? sprite : []);
+    const resultArray = [];
+    if (typeof sprite === 'string') {
+        resultArray.push({ id: 'default', url: sprite });
+    }
+    else if (sprite && sprite.length > 0) {
+        const dedupArray = [];
+        for (const { id, url } of sprite) {
+            const key = `${id}${url}`;
+            if (dedupArray.indexOf(key) === -1) {
+                dedupArray.push(key);
+                resultArray.push({ id, url });
+            }
+        }
+    }
+    return resultArray;
 }
 
 function loadSprite(originalSprite, requestManager, pixelRatio, callback) {
-    const sprite = coerceSpriteToArray(originalSprite);
+    const spriteArray = coerceSpriteToArray(originalSprite);
+    const spriteArrayLength = spriteArray.length;
     const format = pixelRatio > 1 ? '@2x' : '';
-    let error;
-    const jsonRequests = [];
-    const imageRequests = [];
+    const combinedRequestsMap = {};
     const jsonsMap = {};
     const imagesMap = {};
-    for (const { id, url } of sprite) {
-        // eslint-disable-next-line no-loop-func
-        const newJsonRequestsLength = jsonRequests.push(performance.getJSON(requestManager.transformRequest(requestManager.normalizeSpriteURL(url, format, '.json'), ResourceType.SpriteJSON), (err, data) => {
-            jsonRequests.splice(newJsonRequestsLength, 1);
-            if (!error) {
-                error = err;
-                jsonsMap[id] = data;
-                maybeComplete();
-            }
-        }));
-        // eslint-disable-next-line no-loop-func
-        const newImageRequestsLength = imageRequests.push(ImageRequest$1.getImage(requestManager.transformRequest(requestManager.normalizeSpriteURL(url, format, '.png'), ResourceType.SpriteImage), (err, img) => {
-            imageRequests.splice(newImageRequestsLength, 1);
-            if (!error) {
-                error = err;
-                imagesMap[id] = img;
-                maybeComplete();
-            }
-        }));
-    }
-    function maybeComplete() {
-        const jsonsLength = Object.values(jsonsMap).length;
-        const imagesLength = Object.values(imagesMap).length;
-        if (error) {
-            callback(error);
-        }
-        else if (sprite.length === jsonsLength && jsonsLength === imagesLength) {
-            const result = {};
-            for (const spriteName in jsonsMap) {
-                result[spriteName] = {};
-                const context = performance.exported.getImageCanvasContext(imagesMap[spriteName]);
-                const json = jsonsMap[spriteName];
-                for (const id in json) {
-                    const { width, height, x, y, sdf, pixelRatio, stretchX, stretchY, content } = json[id];
-                    const spriteData = { width, height, x, y, context };
-                    result[spriteName][id] = { data: null, pixelRatio, sdf, stretchX, stretchY, content, spriteData };
-                }
-            }
-            callback(null, result);
-        }
+    for (const { id, url } of spriteArray) {
+        const jsonRequestParameters = requestManager.transformRequest(requestManager.normalizeSpriteURL(url, format, '.json'), ResourceType.SpriteJSON);
+        const jsonRequestKey = `${id}_${jsonRequestParameters.url}`; // use id_url as requestMap key to make sure it is unique
+        combinedRequestsMap[jsonRequestKey] = performance.getJSON(jsonRequestParameters, (err, data) => {
+            delete combinedRequestsMap[jsonRequestKey];
+            jsonsMap[id] = data;
+            doOnceCompleted(callback, jsonsMap, imagesMap, err, spriteArrayLength);
+        });
+        const imageRequestParameters = requestManager.transformRequest(requestManager.normalizeSpriteURL(url, format, '.png'), ResourceType.SpriteImage);
+        const imageRequestKey = `${id}_${imageRequestParameters.url}`; // use id_url as requestMap key to make sure it is unique
+        combinedRequestsMap[imageRequestKey] = ImageRequest$1.getImage(imageRequestParameters, (err, img) => {
+            delete combinedRequestsMap[imageRequestKey];
+            imagesMap[id] = img;
+            doOnceCompleted(callback, jsonsMap, imagesMap, err, spriteArrayLength);
+        });
     }
     return {
         cancel() {
-            if (jsonRequests.length) {
-                for (const jsonRequest of jsonRequests) {
-                    jsonRequest.cancel();
-                    jsonRequests.splice(jsonRequests.indexOf(jsonRequest), 1);
-                }
-            }
-            if (imageRequests.length) {
-                for (const imageRequest of imageRequests) {
-                    imageRequest.cancel();
-                    imageRequests.splice(imageRequests.indexOf(imageRequest), 1);
-                }
+            for (const requst of Object.values(combinedRequestsMap)) {
+                requst.cancel();
             }
         }
     };
+}
+/**
+ * @param callbackFunc - the callback function (both erro and success)
+ * @param jsonsMap - JSON data map
+ * @param imagesMap - image data map
+ * @param err - error object
+ * @param expectedResultCounter - number of expected JSON or Image results when everything is finished, respectively.
+ */
+function doOnceCompleted(callbackFunc, jsonsMap, imagesMap, err, expectedResultCounter) {
+    if (err) {
+        callbackFunc(err);
+        return;
+    }
+    if (expectedResultCounter !== Object.values(jsonsMap).length || expectedResultCounter !== Object.values(imagesMap).length) {
+        // not done yet, nothing to do
+        return;
+    }
+    const result = {};
+    for (const spriteName in jsonsMap) {
+        result[spriteName] = {};
+        const context = performance.exported.getImageCanvasContext(imagesMap[spriteName]);
+        const json = jsonsMap[spriteName];
+        for (const id in json) {
+            const { width, height, x, y, sdf, pixelRatio, stretchX, stretchY, content } = json[id];
+            const spriteData = { width, height, x, y, context };
+            result[spriteName][id] = { data: null, pixelRatio, sdf, stretchX, stretchY, content, spriteData };
+        }
+    }
+    callbackFunc(null, result);
 }
 
 class Texture {
@@ -33693,7 +34865,12 @@ class ImageManager extends performance.Evented {
     _notify(ids, callback) {
         const response = {};
         for (const id of ids) {
-            const image = this.getImage(id);
+            let image = this.getImage(id);
+            if (!image) {
+                this.fire(new performance.Event('styleimagemissing', { id }));
+                //Try to acquire image again in case styleimagemissing has populated it
+                image = this.getImage(id);
+            }
             if (image) {
                 // Clone the image so that our own copy of its ArrayBuffer doesn't get transferred.
                 response[id] = {
@@ -33708,7 +34885,6 @@ class ImageManager extends performance.Evented {
                 };
             }
             else {
-                this.fire(new performance.Event('styleimagemissing', { id }));
                 performance.warnOnce(`Image "${id}" could not be loaded. Please make sure you have added the image with map.addImage() or a "sprite" property in your style. You can provide missing images by listening for the "styleimagemissing" map event.`);
             }
         }
@@ -34122,24 +35298,24 @@ GlyphManager.TinySDF = TinySDF;
 
 class LightPositionProperty {
     constructor() {
-        this.specification = performance.spec.light.position;
+        this.specification = performance.v8Spec.light.position;
     }
     possiblyEvaluate(value, parameters) {
         return performance.sphericalToCartesian(value.expression.evaluate(parameters));
     }
     interpolate(a, b, t) {
         return {
-            x: performance.number(a.x, b.x, t),
-            y: performance.number(a.y, b.y, t),
-            z: performance.number(a.z, b.z, t),
+            x: performance.interpolate.number(a.x, b.x, t),
+            y: performance.interpolate.number(a.y, b.y, t),
+            z: performance.interpolate.number(a.z, b.z, t),
         };
     }
 }
 const properties = new performance.Properties({
-    'anchor': new performance.DataConstantProperty(performance.spec.light.anchor),
+    'anchor': new performance.DataConstantProperty(performance.v8Spec.light.anchor),
     'position': new LightPositionProperty(),
-    'color': new performance.DataConstantProperty(performance.spec.light.color),
-    'intensity': new performance.DataConstantProperty(performance.spec.light.intensity),
+    'color': new performance.DataConstantProperty(performance.v8Spec.light.color),
+    'intensity': new performance.DataConstantProperty(performance.v8Spec.light.intensity),
 });
 const TRANSITION_SUFFIX = '-transition';
 /*
@@ -34186,7 +35362,7 @@ class Light extends performance.Evented {
             value,
             // Workaround for https://github.com/mapbox/mapbox-gl-js/issues/2407
             style: { glyphs: true, sprite: true },
-            styleSpec: performance.spec
+            styleSpec: performance.v8Spec
         })));
     }
 }
@@ -34429,9 +35605,275 @@ function loadTileJson(options, requestManager, callback) {
     }
 }
 
+/**
+ * A `LngLatBounds` object represents a geographical bounding box,
+ * defined by its southwest and northeast points in longitude and latitude.
+ *
+ * If no arguments are provided to the constructor, a `null` bounding box is created.
+ *
+ * Note that any Mapbox GL method that accepts a `LngLatBounds` object as an argument or option
+ * can also accept an `Array` of two {@link LngLatLike} constructs and will perform an implicit conversion.
+ * This flexible type is documented as {@link LngLatBoundsLike}.
+ *
+ * @param {LngLatLike} [sw] The southwest corner of the bounding box.
+ * @param {LngLatLike} [ne] The northeast corner of the bounding box.
+ * @example
+ * var sw = new maplibregl.LngLat(-73.9876, 40.7661);
+ * var ne = new maplibregl.LngLat(-73.9397, 40.8002);
+ * var llb = new maplibregl.LngLatBounds(sw, ne);
+ */
+class LngLatBounds {
+    /**
+     * @param {LngLatLike} [sw] The southwest corner of the bounding box.
+     * OR array of 4 numbers in the order of  west, south, east, north
+     * OR array of 2 LngLatLike: [sw,ne]
+     * @param {LngLatLike} [ne] The northeast corner of the bounding box.
+     * @example
+     * var sw = new maplibregl.LngLat(-73.9876, 40.7661);
+     * var ne = new maplibregl.LngLat(-73.9397, 40.8002);
+     * var llb = new maplibregl.LngLatBounds(sw, ne);
+     * OR
+     * var llb = new maplibregl.LngLatBounds([-73.9876, 40.7661, -73.9397, 40.8002]);
+     * OR
+     * var llb = new maplibregl.LngLatBounds([sw, ne]);
+     */
+    constructor(sw, ne) {
+        if (!sw) {
+            // noop
+        }
+        else if (ne) {
+            this.setSouthWest(sw).setNorthEast(ne);
+        }
+        else if (Array.isArray(sw)) {
+            if (sw.length === 4) {
+                // 4 element array: west, south, east, north
+                this.setSouthWest([sw[0], sw[1]]).setNorthEast([sw[2], sw[3]]);
+            }
+            else {
+                this.setSouthWest(sw[0]).setNorthEast(sw[1]);
+            }
+        }
+    }
+    /**
+     * Set the northeast corner of the bounding box
+     *
+     * @param {LngLatLike} ne a {@link LngLatLike} object describing the northeast corner of the bounding box.
+     * @returns {LngLatBounds} `this`
+     */
+    setNorthEast(ne) {
+        this._ne = ne instanceof performance.LngLat ? new performance.LngLat(ne.lng, ne.lat) : performance.LngLat.convert(ne);
+        return this;
+    }
+    /**
+     * Set the southwest corner of the bounding box
+     *
+     * @param {LngLatLike} sw a {@link LngLatLike} object describing the southwest corner of the bounding box.
+     * @returns {LngLatBounds} `this`
+     */
+    setSouthWest(sw) {
+        this._sw = sw instanceof performance.LngLat ? new performance.LngLat(sw.lng, sw.lat) : performance.LngLat.convert(sw);
+        return this;
+    }
+    /**
+     * Extend the bounds to include a given LngLatLike or LngLatBoundsLike.
+     *
+     * @param {LngLatLike|LngLatBoundsLike} obj object to extend to
+     * @returns {LngLatBounds} `this`
+     */
+    extend(obj) {
+        const sw = this._sw, ne = this._ne;
+        let sw2, ne2;
+        if (obj instanceof performance.LngLat) {
+            sw2 = obj;
+            ne2 = obj;
+        }
+        else if (obj instanceof LngLatBounds) {
+            sw2 = obj._sw;
+            ne2 = obj._ne;
+            if (!sw2 || !ne2)
+                return this;
+        }
+        else {
+            if (Array.isArray(obj)) {
+                if (obj.length === 4 || obj.every(Array.isArray)) {
+                    const lngLatBoundsObj = obj;
+                    return this.extend(LngLatBounds.convert(lngLatBoundsObj));
+                }
+                else {
+                    const lngLatObj = obj;
+                    return this.extend(performance.LngLat.convert(lngLatObj));
+                }
+            }
+            return this;
+        }
+        if (!sw && !ne) {
+            this._sw = new performance.LngLat(sw2.lng, sw2.lat);
+            this._ne = new performance.LngLat(ne2.lng, ne2.lat);
+        }
+        else {
+            sw.lng = Math.min(sw2.lng, sw.lng);
+            sw.lat = Math.min(sw2.lat, sw.lat);
+            ne.lng = Math.max(ne2.lng, ne.lng);
+            ne.lat = Math.max(ne2.lat, ne.lat);
+        }
+        return this;
+    }
+    /**
+     * Returns the geographical coordinate equidistant from the bounding box's corners.
+     *
+     * @returns {LngLat} The bounding box's center.
+     * @example
+     * var llb = new maplibregl.LngLatBounds([-73.9876, 40.7661], [-73.9397, 40.8002]);
+     * llb.getCenter(); // = LngLat {lng: -73.96365, lat: 40.78315}
+     */
+    getCenter() {
+        return new performance.LngLat((this._sw.lng + this._ne.lng) / 2, (this._sw.lat + this._ne.lat) / 2);
+    }
+    /**
+     * Returns the southwest corner of the bounding box.
+     *
+     * @returns {LngLat} The southwest corner of the bounding box.
+     */
+    getSouthWest() { return this._sw; }
+    /**
+     * Returns the northeast corner of the bounding box.
+     *
+     * @returns {LngLat} The northeast corner of the bounding box.
+     */
+    getNorthEast() { return this._ne; }
+    /**
+     * Returns the northwest corner of the bounding box.
+     *
+     * @returns {LngLat} The northwest corner of the bounding box.
+     */
+    getNorthWest() { return new performance.LngLat(this.getWest(), this.getNorth()); }
+    /**
+     * Returns the southeast corner of the bounding box.
+     *
+     * @returns {LngLat} The southeast corner of the bounding box.
+     */
+    getSouthEast() { return new performance.LngLat(this.getEast(), this.getSouth()); }
+    /**
+     * Returns the west edge of the bounding box.
+     *
+     * @returns {number} The west edge of the bounding box.
+     */
+    getWest() { return this._sw.lng; }
+    /**
+     * Returns the south edge of the bounding box.
+     *
+     * @returns {number} The south edge of the bounding box.
+     */
+    getSouth() { return this._sw.lat; }
+    /**
+     * Returns the east edge of the bounding box.
+     *
+     * @returns {number} The east edge of the bounding box.
+     */
+    getEast() { return this._ne.lng; }
+    /**
+     * Returns the north edge of the bounding box.
+     *
+     * @returns {number} The north edge of the bounding box.
+     */
+    getNorth() { return this._ne.lat; }
+    /**
+     * Returns the bounding box represented as an array.
+     *
+     * @returns {Array<Array<number>>} The bounding box represented as an array, consisting of the
+     * southwest and northeast coordinates of the bounding represented as arrays of numbers.
+     * @example
+     * var llb = new maplibregl.LngLatBounds([-73.9876, 40.7661], [-73.9397, 40.8002]);
+     * llb.toArray(); // = [[-73.9876, 40.7661], [-73.9397, 40.8002]]
+     */
+    toArray() {
+        return [this._sw.toArray(), this._ne.toArray()];
+    }
+    /**
+     * Return the bounding box represented as a string.
+     *
+     * @returns {string} The bounding box represents as a string of the format
+     * `'LngLatBounds(LngLat(lng, lat), LngLat(lng, lat))'`.
+     * @example
+     * var llb = new maplibregl.LngLatBounds([-73.9876, 40.7661], [-73.9397, 40.8002]);
+     * llb.toString(); // = "LngLatBounds(LngLat(-73.9876, 40.7661), LngLat(-73.9397, 40.8002))"
+     */
+    toString() {
+        return `LngLatBounds(${this._sw.toString()}, ${this._ne.toString()})`;
+    }
+    /**
+     * Check if the bounding box is an empty/`null`-type box.
+     *
+     * @returns {boolean} True if bounds have been defined, otherwise false.
+     */
+    isEmpty() {
+        return !(this._sw && this._ne);
+    }
+    /**
+     * Check if the point is within the bounding box.
+     *
+     * @param {LngLatLike} lnglat geographic point to check against.
+     * @returns {boolean} True if the point is within the bounding box.
+     * @example
+     * var llb = new maplibregl.LngLatBounds(
+     *   new maplibregl.LngLat(-73.9876, 40.7661),
+     *   new maplibregl.LngLat(-73.9397, 40.8002)
+     * );
+     *
+     * var ll = new maplibregl.LngLat(-73.9567, 40.7789);
+     *
+     * console.log(llb.contains(ll)); // = true
+     */
+    contains(lnglat) {
+        const { lng, lat } = performance.LngLat.convert(lnglat);
+        const containsLatitude = this._sw.lat <= lat && lat <= this._ne.lat;
+        let containsLongitude = this._sw.lng <= lng && lng <= this._ne.lng;
+        if (this._sw.lng > this._ne.lng) { // wrapped coordinates
+            containsLongitude = this._sw.lng >= lng && lng >= this._ne.lng;
+        }
+        return containsLatitude && containsLongitude;
+    }
+    /**
+     * Converts an array to a `LngLatBounds` object.
+     *
+     * If a `LngLatBounds` object is passed in, the function returns it unchanged.
+     *
+     * Internally, the function calls `LngLat#convert` to convert arrays to `LngLat` values.
+     *
+     * @param {LngLatBoundsLike} input An array of two coordinates to convert, or a `LngLatBounds` object to return.
+     * @returns {LngLatBounds} A new `LngLatBounds` object, if a conversion occurred, or the original `LngLatBounds` object.
+     * @example
+     * var arr = [[-73.9876, 40.7661], [-73.9397, 40.8002]];
+     * var llb = maplibregl.LngLatBounds.convert(arr);
+     * llb;   // = LngLatBounds {_sw: LngLat {lng: -73.9876, lat: 40.7661}, _ne: LngLat {lng: -73.9397, lat: 40.8002}}
+     */
+    static convert(input) {
+        if (input instanceof LngLatBounds)
+            return input;
+        if (!input)
+            return input;
+        return new LngLatBounds(input);
+    }
+    /**
+     * Returns a `LngLatBounds` from the coordinates extended by a given `radius`. The returned `LngLatBounds` completely contains the `radius`.
+     *
+     * @param center center coordinates of the new bounds.
+     * @param {number} [radius=0] Distance in meters from the coordinates to extend the bounds.
+     * @returns {LngLatBounds} A new `LngLatBounds` object representing the coordinates extended by the `radius`.
+     * @example
+     * var center = new maplibregl.LngLat(-73.9749, 40.7736);
+     * maplibregl.LngLatBounds.fromLngLat(100).toArray(); // = [[-73.97501862141328, 40.77351016847229], [-73.97478137858673, 40.77368983152771]]
+     */
+    static fromLngLat(center, radius = 0) {
+        const earthCircumferenceInMetersAtEquator = 40075017;
+        const latAccuracy = 360 * radius / earthCircumferenceInMetersAtEquator, lngAccuracy = latAccuracy / Math.cos((Math.PI / 180) * center.lat);
+        return new LngLatBounds(new performance.LngLat(center.lng - lngAccuracy, center.lat - latAccuracy), new performance.LngLat(center.lng + lngAccuracy, center.lat + latAccuracy));
+    }
+}
+
 class TileBounds {
     constructor(bounds, minzoom, maxzoom) {
-        this.bounds = performance.LngLatBounds.convert(this.validateBounds(bounds));
+        this.bounds = LngLatBounds.convert(this.validateBounds(bounds));
         this.minzoom = minzoom || 0;
         this.maxzoom = maxzoom || 24;
     }
@@ -34456,7 +35898,7 @@ class TileBounds {
 
 /**
  * A source containing vector tiles in [Mapbox Vector Tile format](https://docs.mapbox.com/vector-tiles/reference/).
- * (See the [Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/) for detailed documentation of options.)
+ * (See the [Style Specification](https://maplibre.org/maplibre-style-spec/) for detailed documentation of options.)
  *
  * @example
  * map.addSource('some id', {
@@ -34865,7 +36307,7 @@ class RasterDEMTileSource extends RasterTileSource {
 
 /**
  * A source containing GeoJSON.
- * (See the [Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/#sources-geojson) for detailed documentation of options.)
+ * (See the [Style Specification](https://maplibre.org/maplibre-style-spec/#sources-geojson) for detailed documentation of options.)
  *
  * @example
  * map.addSource('some id', {
@@ -35191,7 +36633,7 @@ var rasterBoundsAttributes = performance.createLayout([
 
 /**
  * A data source containing an image.
- * (See the [Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/#sources-image) for detailed documentation of options.)
+ * (See the [Style Specification](https://maplibre.org/maplibre-style-spec/#sources-image) for detailed documentation of options.)
  *
  * @example
  * // add to map
@@ -35278,9 +36720,9 @@ class ImageSource extends performance.Evented {
      * @param {Object} options Options object.
      * @param {string} [options.url] Required image URL.
      * @param {Array<Array<number>>} [options.coordinates] Four geographical coordinates,
-     *   represented as arrays of longitude and latitude numbers, which define the corners of the image.
-     *   The coordinates start at the top left corner of the image and proceed in clockwise order.
-     *   They do not have to represent a rectangle.
+     * represented as arrays of longitude and latitude numbers, which define the corners of the image.
+     * The coordinates start at the top left corner of the image and proceed in clockwise order.
+     * They do not have to represent a rectangle.
      * @returns {ImageSource} this
      */
     updateImage(options) {
@@ -35315,9 +36757,9 @@ class ImageSource extends performance.Evented {
      * Sets the image's coordinates and re-renders the map.
      *
      * @param {Array<Array<number>>} coordinates Four geographical coordinates,
-     *   represented as arrays of longitude and latitude numbers, which define the corners of the image.
-     *   The coordinates start at the top left corner of the image and proceed in clockwise order.
-     *   They do not have to represent a rectangle.
+     * represented as arrays of longitude and latitude numbers, which define the corners of the image.
+     * The coordinates start at the top left corner of the image and proceed in clockwise order.
+     * They do not have to represent a rectangle.
      * @returns {ImageSource} this
      */
     setCoordinates(coordinates) {
@@ -35374,7 +36816,7 @@ class ImageSource extends performance.Evented {
         }
     }
     loadTile(tile, callback) {
-        // We have a single tile -- whoose coordinates are this.tileID -- that
+        // We have a single tile -- whose coordinates are this.tileID -- that
         // covers the image we want to render.  If that's the one being
         // requested, set it up with the image; otherwise, mark the tile as
         // `errored` to indicate that we have no data for it.
@@ -35428,7 +36870,7 @@ function getCoordinatesCenterTileID(coords) {
 
 /**
  * A data source containing video.
- * (See the [Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/#sources-video) for detailed documentation of options.)
+ * (See the [Style Specification](https://maplibre.org/maplibre-style-spec/#sources-video) for detailed documentation of options.)
  *
  * @example
  * // add to map
@@ -35794,7 +37236,7 @@ const sourceTypes = {
  *
  * @param id
  * @param {Object} source A source definition object compliant with
- * [`maplibre-gl-style-spec`](https://maplibre.org/maplibre-gl-js-docs/style-spec/#sources) or, for a third-party source type,
+ * [`maplibre-gl-style-spec`](https://maplibre.org/maplibre-style-spec/#sources) or, for a third-party source type,
   * with that type's requirements.
  * @param {Dispatcher} dispatcher
  * @returns {Source}
@@ -36804,8 +38246,8 @@ class SourceCache extends performance.Evented {
             return renderables.sort((a_, b_) => {
                 const a = a_.tileID;
                 const b = b_.tileID;
-                const rotatedA = (new performance.pointGeometry(a.canonical.x, a.canonical.y))._rotate(this.transform.angle);
-                const rotatedB = (new performance.pointGeometry(b.canonical.x, b.canonical.y))._rotate(this.transform.angle);
+                const rotatedA = (new performance.Point(a.canonical.x, a.canonical.y))._rotate(this.transform.angle);
+                const rotatedB = (new performance.Point(b.canonical.x, b.canonical.y))._rotate(this.transform.angle);
                 return a.overscaledZ - b.overscaledZ || rotatedB.y - rotatedA.y || rotatedB.x - rotatedA.x;
             }).map(tile => tile.tileID.key);
         }
@@ -37098,7 +38540,7 @@ class SourceCache extends performance.Evented {
                 if (tileID.canonical.z > this._source.minzoom) {
                     const parent = tileID.scaledTo(tileID.canonical.z - 1);
                     parents[parent.key] = parent;
-                    // load very low zoom to calculate tile visability in transform.coveringTiles and high zoomlevels correct
+                    // load very low zoom to calculate tile visibility in transform.coveringTiles and high zoomlevels correct
                     const parent2 = tileID.scaledTo(Math.max(this._source.minzoom, Math.min(tileID.canonical.z, 5)));
                     parents[parent2.key] = parent2;
                 }
@@ -37260,11 +38702,14 @@ class SourceCache extends performance.Evented {
                     tile = this._addTile(parentId);
                 }
                 if (tile) {
-                    retain[parentId.key] = parentId;
+                    const hasData = tile.hasData();
+                    if (parentWasRequested || hasData) {
+                        retain[parentId.key] = parentId;
+                    }
                     // Save the current values, since they're the parent of the next iteration
                     // of the parent tile ascent loop.
                     parentWasRequested = tile.wasRequested();
-                    if (tile.hasData())
+                    if (hasData)
                         break;
                 }
             }
@@ -37521,7 +38966,7 @@ function isRasterType(type) {
 }
 
 function workerFactory() {
-    return new Worker(maplibregl.workerUrl);
+    return new Worker(performance.config.WORKER_URL);
 }
 
 const PRELOAD_POOL_ID = 'mapboxgl_preloaded_worker_pool';
@@ -37592,425 +39037,6 @@ function clearPrewarmedResources() {
             console.warn('Could not clear WebWorkers since there are active Map instances that still reference it. The pre-warmed WebWorker pool can only be cleared when all map instances have been removed with map.remove()');
         }
     }
-}
-
-function deref(layer, parent) {
-    const result = {};
-    for (const k in layer) {
-        if (k !== 'ref') {
-            result[k] = layer[k];
-        }
-    }
-    performance.refProperties.forEach((k) => {
-        if (k in parent) {
-            result[k] = parent[k];
-        }
-    });
-    return result;
-}
-/**
- * Given an array of layers, some of which may contain `ref` properties
- * whose value is the `id` of another property, return a new array where
- * such layers have been augmented with the 'type', 'source', etc. properties
- * from the parent layer, and the `ref` property has been removed.
- *
- * The input is not modified. The output may contain references to portions
- * of the input.
- *
- * @private
- * @param {Array<Layer>} layers
- * @returns {Array<Layer>}
- */
-function derefLayers(layers) {
-    layers = layers.slice();
-    const map = Object.create(null);
-    for (let i = 0; i < layers.length; i++) {
-        map[layers[i].id] = layers[i];
-    }
-    for (let i = 0; i < layers.length; i++) {
-        if ('ref' in layers[i]) {
-            layers[i] = deref(layers[i], map[layers[i].ref]);
-        }
-    }
-    return layers;
-}
-
-function emptyStyle() {
-    const style = {};
-    const version = performance.spec['$version'];
-    for (const styleKey in performance.spec['$root']) {
-        const spec = performance.spec['$root'][styleKey];
-        if (spec.required) {
-            let value = null;
-            if (styleKey === 'version') {
-                value = version;
-            }
-            else {
-                if (spec.type === 'array') {
-                    value = [];
-                }
-                else {
-                    value = {};
-                }
-            }
-            if (value != null) {
-                style[styleKey] = value;
-            }
-        }
-    }
-    return style;
-}
-
-const operations = {
-    /*
-     * { command: 'setStyle', args: [stylesheet] }
-     */
-    setStyle: 'setStyle',
-    /*
-     * { command: 'addLayer', args: [layer, 'beforeLayerId'] }
-     */
-    addLayer: 'addLayer',
-    /*
-     * { command: 'removeLayer', args: ['layerId'] }
-     */
-    removeLayer: 'removeLayer',
-    /*
-     * { command: 'setPaintProperty', args: ['layerId', 'prop', value] }
-     */
-    setPaintProperty: 'setPaintProperty',
-    /*
-     * { command: 'setLayoutProperty', args: ['layerId', 'prop', value] }
-     */
-    setLayoutProperty: 'setLayoutProperty',
-    /*
-     * { command: 'setFilter', args: ['layerId', filter] }
-     */
-    setFilter: 'setFilter',
-    /*
-     * { command: 'addSource', args: ['sourceId', source] }
-     */
-    addSource: 'addSource',
-    /*
-     * { command: 'removeSource', args: ['sourceId'] }
-     */
-    removeSource: 'removeSource',
-    /*
-     * { command: 'setGeoJSONSourceData', args: ['sourceId', data] }
-     */
-    setGeoJSONSourceData: 'setGeoJSONSourceData',
-    /*
-     * { command: 'setLayerZoomRange', args: ['layerId', 0, 22] }
-     */
-    setLayerZoomRange: 'setLayerZoomRange',
-    /*
-     * { command: 'setLayerProperty', args: ['layerId', 'prop', value] }
-     */
-    setLayerProperty: 'setLayerProperty',
-    /*
-     * { command: 'setCenter', args: [[lon, lat]] }
-     */
-    setCenter: 'setCenter',
-    /*
-     * { command: 'setZoom', args: [zoom] }
-     */
-    setZoom: 'setZoom',
-    /*
-     * { command: 'setBearing', args: [bearing] }
-     */
-    setBearing: 'setBearing',
-    /*
-     * { command: 'setPitch', args: [pitch] }
-     */
-    setPitch: 'setPitch',
-    /*
-     * { command: 'setSprite', args: ['spriteUrl'] }
-     */
-    setSprite: 'setSprite',
-    /*
-     * { command: 'setGlyphs', args: ['glyphsUrl'] }
-     */
-    setGlyphs: 'setGlyphs',
-    /*
-     * { command: 'setTransition', args: [transition] }
-     */
-    setTransition: 'setTransition',
-    /*
-     * { command: 'setLighting', args: [lightProperties] }
-     */
-    setLight: 'setLight'
-};
-function addSource(sourceId, after, commands) {
-    commands.push({ command: operations.addSource, args: [sourceId, after[sourceId]] });
-}
-function removeSource(sourceId, commands, sourcesRemoved) {
-    commands.push({ command: operations.removeSource, args: [sourceId] });
-    sourcesRemoved[sourceId] = true;
-}
-function updateSource(sourceId, after, commands, sourcesRemoved) {
-    removeSource(sourceId, commands, sourcesRemoved);
-    addSource(sourceId, after, commands);
-}
-function canUpdateGeoJSON(before, after, sourceId) {
-    let prop;
-    for (prop in before[sourceId]) {
-        if (!Object.prototype.hasOwnProperty.call(before[sourceId], prop))
-            continue;
-        if (prop !== 'data' && !performance.deepEqual(before[sourceId][prop], after[sourceId][prop])) {
-            return false;
-        }
-    }
-    for (prop in after[sourceId]) {
-        if (!Object.prototype.hasOwnProperty.call(after[sourceId], prop))
-            continue;
-        if (prop !== 'data' && !performance.deepEqual(before[sourceId][prop], after[sourceId][prop])) {
-            return false;
-        }
-    }
-    return true;
-}
-function diffSources(before, after, commands, sourcesRemoved) {
-    before = before || {};
-    after = after || {};
-    let sourceId;
-    // look for sources to remove
-    for (sourceId in before) {
-        if (!Object.prototype.hasOwnProperty.call(before, sourceId))
-            continue;
-        if (!Object.prototype.hasOwnProperty.call(after, sourceId)) {
-            removeSource(sourceId, commands, sourcesRemoved);
-        }
-    }
-    // look for sources to add/update
-    for (sourceId in after) {
-        if (!Object.prototype.hasOwnProperty.call(after, sourceId))
-            continue;
-        if (!Object.prototype.hasOwnProperty.call(before, sourceId)) {
-            addSource(sourceId, after, commands);
-        }
-        else if (!performance.deepEqual(before[sourceId], after[sourceId])) {
-            if (before[sourceId].type === 'geojson' && after[sourceId].type === 'geojson' && canUpdateGeoJSON(before, after, sourceId)) {
-                commands.push({ command: operations.setGeoJSONSourceData, args: [sourceId, after[sourceId].data] });
-            }
-            else {
-                // no update command, must remove then add
-                updateSource(sourceId, after, commands, sourcesRemoved);
-            }
-        }
-    }
-}
-function diffLayerPropertyChanges(before, after, commands, layerId, klass, command) {
-    before = before || {};
-    after = after || {};
-    let prop;
-    for (prop in before) {
-        if (!Object.prototype.hasOwnProperty.call(before, prop))
-            continue;
-        if (!performance.deepEqual(before[prop], after[prop])) {
-            commands.push({ command, args: [layerId, prop, after[prop], klass] });
-        }
-    }
-    for (prop in after) {
-        if (!Object.prototype.hasOwnProperty.call(after, prop) || Object.prototype.hasOwnProperty.call(before, prop))
-            continue;
-        if (!performance.deepEqual(before[prop], after[prop])) {
-            commands.push({ command, args: [layerId, prop, after[prop], klass] });
-        }
-    }
-}
-function pluckId(layer) {
-    return layer.id;
-}
-function indexById(group, layer) {
-    group[layer.id] = layer;
-    return group;
-}
-function diffLayers(before, after, commands) {
-    before = before || [];
-    after = after || [];
-    // order of layers by id
-    const beforeOrder = before.map(pluckId);
-    const afterOrder = after.map(pluckId);
-    // index of layer by id
-    const beforeIndex = before.reduce(indexById, {});
-    const afterIndex = after.reduce(indexById, {});
-    // track order of layers as if they have been mutated
-    const tracker = beforeOrder.slice();
-    // layers that have been added do not need to be diffed
-    const clean = Object.create(null);
-    let i, d, layerId, beforeLayer, afterLayer, insertBeforeLayerId, prop;
-    // remove layers
-    for (i = 0, d = 0; i < beforeOrder.length; i++) {
-        layerId = beforeOrder[i];
-        if (!Object.prototype.hasOwnProperty.call(afterIndex, layerId)) {
-            commands.push({ command: operations.removeLayer, args: [layerId] });
-            tracker.splice(tracker.indexOf(layerId, d), 1);
-        }
-        else {
-            // limit where in tracker we need to look for a match
-            d++;
-        }
-    }
-    // add/reorder layers
-    for (i = 0, d = 0; i < afterOrder.length; i++) {
-        // work backwards as insert is before an existing layer
-        layerId = afterOrder[afterOrder.length - 1 - i];
-        if (tracker[tracker.length - 1 - i] === layerId)
-            continue;
-        if (Object.prototype.hasOwnProperty.call(beforeIndex, layerId)) {
-            // remove the layer before we insert at the correct position
-            commands.push({ command: operations.removeLayer, args: [layerId] });
-            tracker.splice(tracker.lastIndexOf(layerId, tracker.length - d), 1);
-        }
-        else {
-            // limit where in tracker we need to look for a match
-            d++;
-        }
-        // add layer at correct position
-        insertBeforeLayerId = tracker[tracker.length - i];
-        commands.push({ command: operations.addLayer, args: [afterIndex[layerId], insertBeforeLayerId] });
-        tracker.splice(tracker.length - i, 0, layerId);
-        clean[layerId] = true;
-    }
-    // update layers
-    for (i = 0; i < afterOrder.length; i++) {
-        layerId = afterOrder[i];
-        beforeLayer = beforeIndex[layerId];
-        afterLayer = afterIndex[layerId];
-        // no need to update if previously added (new or moved)
-        if (clean[layerId] || performance.deepEqual(beforeLayer, afterLayer))
-            continue;
-        // If source, source-layer, or type have changes, then remove the layer
-        // and add it back 'from scratch'.
-        if (!performance.deepEqual(beforeLayer.source, afterLayer.source) || !performance.deepEqual(beforeLayer['source-layer'], afterLayer['source-layer']) || !performance.deepEqual(beforeLayer.type, afterLayer.type)) {
-            commands.push({ command: operations.removeLayer, args: [layerId] });
-            // we add the layer back at the same position it was already in, so
-            // there's no need to update the `tracker`
-            insertBeforeLayerId = tracker[tracker.lastIndexOf(layerId) + 1];
-            commands.push({ command: operations.addLayer, args: [afterLayer, insertBeforeLayerId] });
-            continue;
-        }
-        // layout, paint, filter, minzoom, maxzoom
-        diffLayerPropertyChanges(beforeLayer.layout, afterLayer.layout, commands, layerId, null, operations.setLayoutProperty);
-        diffLayerPropertyChanges(beforeLayer.paint, afterLayer.paint, commands, layerId, null, operations.setPaintProperty);
-        if (!performance.deepEqual(beforeLayer.filter, afterLayer.filter)) {
-            commands.push({ command: operations.setFilter, args: [layerId, afterLayer.filter] });
-        }
-        if (!performance.deepEqual(beforeLayer.minzoom, afterLayer.minzoom) || !performance.deepEqual(beforeLayer.maxzoom, afterLayer.maxzoom)) {
-            commands.push({ command: operations.setLayerZoomRange, args: [layerId, afterLayer.minzoom, afterLayer.maxzoom] });
-        }
-        // handle all other layer props, including paint.*
-        for (prop in beforeLayer) {
-            if (!Object.prototype.hasOwnProperty.call(beforeLayer, prop))
-                continue;
-            if (prop === 'layout' || prop === 'paint' || prop === 'filter' ||
-                prop === 'metadata' || prop === 'minzoom' || prop === 'maxzoom')
-                continue;
-            if (prop.indexOf('paint.') === 0) {
-                diffLayerPropertyChanges(beforeLayer[prop], afterLayer[prop], commands, layerId, prop.slice(6), operations.setPaintProperty);
-            }
-            else if (!performance.deepEqual(beforeLayer[prop], afterLayer[prop])) {
-                commands.push({ command: operations.setLayerProperty, args: [layerId, prop, afterLayer[prop]] });
-            }
-        }
-        for (prop in afterLayer) {
-            if (!Object.prototype.hasOwnProperty.call(afterLayer, prop) || Object.prototype.hasOwnProperty.call(beforeLayer, prop))
-                continue;
-            if (prop === 'layout' || prop === 'paint' || prop === 'filter' ||
-                prop === 'metadata' || prop === 'minzoom' || prop === 'maxzoom')
-                continue;
-            if (prop.indexOf('paint.') === 0) {
-                diffLayerPropertyChanges(beforeLayer[prop], afterLayer[prop], commands, layerId, prop.slice(6), operations.setPaintProperty);
-            }
-            else if (!performance.deepEqual(beforeLayer[prop], afterLayer[prop])) {
-                commands.push({ command: operations.setLayerProperty, args: [layerId, prop, afterLayer[prop]] });
-            }
-        }
-    }
-}
-/**
- * Diff two stylesheet
- *
- * Creates semanticly aware diffs that can easily be applied at runtime.
- * Operations produced by the diff closely resemble the maplibre-gl-js API. Any
- * error creating the diff will fall back to the 'setStyle' operation.
- *
- * Example diff:
- * [
- *     { command: 'setConstant', args: ['@water', '#0000FF'] },
- *     { command: 'setPaintProperty', args: ['background', 'background-color', 'black'] }
- * ]
- *
- * @private
- * @param {*} [before] stylesheet to compare from
- * @param {*} after stylesheet to compare to
- * @returns Array list of changes
- */
-function diffStyles(before, after) {
-    if (!before)
-        return [{ command: operations.setStyle, args: [after] }];
-    let commands = [];
-    try {
-        // Handle changes to top-level properties
-        if (!performance.deepEqual(before.version, after.version)) {
-            return [{ command: operations.setStyle, args: [after] }];
-        }
-        if (!performance.deepEqual(before.center, after.center)) {
-            commands.push({ command: operations.setCenter, args: [after.center] });
-        }
-        if (!performance.deepEqual(before.zoom, after.zoom)) {
-            commands.push({ command: operations.setZoom, args: [after.zoom] });
-        }
-        if (!performance.deepEqual(before.bearing, after.bearing)) {
-            commands.push({ command: operations.setBearing, args: [after.bearing] });
-        }
-        if (!performance.deepEqual(before.pitch, after.pitch)) {
-            commands.push({ command: operations.setPitch, args: [after.pitch] });
-        }
-        if (!performance.deepEqual(before.sprite, after.sprite)) {
-            commands.push({ command: operations.setSprite, args: [after.sprite] });
-        }
-        if (!performance.deepEqual(before.glyphs, after.glyphs)) {
-            commands.push({ command: operations.setGlyphs, args: [after.glyphs] });
-        }
-        if (!performance.deepEqual(before.transition, after.transition)) {
-            commands.push({ command: operations.setTransition, args: [after.transition] });
-        }
-        if (!performance.deepEqual(before.light, after.light)) {
-            commands.push({ command: operations.setLight, args: [after.light] });
-        }
-        // Handle changes to `sources`
-        // If a source is to be removed, we also--before the removeSource
-        // command--need to remove all the style layers that depend on it.
-        const sourcesRemoved = {};
-        // First collect the {add,remove}Source commands
-        const removeOrAddSourceCommands = [];
-        diffSources(before.sources, after.sources, removeOrAddSourceCommands, sourcesRemoved);
-        // Push a removeLayer command for each style layer that depends on a
-        // source that's being removed.
-        // Also, exclude any such layers them from the input to `diffLayers`
-        // below, so that diffLayers produces the appropriate `addLayers`
-        // command
-        const beforeLayers = [];
-        if (before.layers) {
-            before.layers.forEach((layer) => {
-                if (sourcesRemoved[layer.source]) {
-                    commands.push({ command: operations.removeLayer, args: [layer.id] });
-                }
-                else {
-                    beforeLayers.push(layer);
-                }
-            });
-        }
-        commands = commands.concat(removeOrAddSourceCommands);
-        // Handle changes to `layers`
-        diffLayers(beforeLayers, after.layers, commands);
-    }
-    catch (e) {
-        // fall back to setStyle
-        console.warn('Unable to compute style diff:', e);
-        commands = [{ command: operations.setStyle, args: [after] }];
-    }
-    return commands;
 }
 
 class PathInterpolator {
@@ -38437,7 +39463,7 @@ function project(point, matrix, getElevation) {
     }
     const w = pos[3];
     return {
-        point: new performance.pointGeometry(pos[0] / w, pos[1] / w),
+        point: new performance.Point(pos[0] / w, pos[1] / w),
         signedDistanceFromCamera: w
     };
 }
@@ -38498,9 +39524,9 @@ function updateLineLabels(bucket, posMatrix, painter, isText, labelPlaneMatrix, 
         const perspectiveRatio = getPerspectiveRatio(painter.transform.cameraToCenterDistance, cameraToAnchorDistance);
         const fontSize = performance.evaluateSizeForFeature(sizeData, partiallyEvaluatedSize, symbol);
         const pitchScaledFontSize = pitchWithMap ? fontSize / perspectiveRatio : fontSize * perspectiveRatio;
-        const tileAnchorPoint = new performance.pointGeometry(symbol.anchorX, symbol.anchorY);
+        const tileAnchorPoint = new performance.Point(symbol.anchorX, symbol.anchorY);
         const anchorPoint = project(tileAnchorPoint, labelPlaneMatrix, getElevation).point;
-        const projectionCache = {};
+        const projectionCache = { projections: {}, offsets: {} };
         const placeUnflipped = placeGlyphsAlongLine(symbol, pitchScaledFontSize, false /*unflipped*/, keepUpright, posMatrix, labelPlaneMatrix, glCoordMatrix, bucket.glyphOffsetArray, lineVertexArray, dynamicLayoutVertexArray, anchorPoint, tileAnchorPoint, projectionCache, aspectRatio, rotateToLine, getElevation);
         useVertical = placeUnflipped.useVertical;
         if (placeUnflipped.notEnoughRoom || useVertical ||
@@ -38516,6 +39542,18 @@ function updateLineLabels(bucket, posMatrix, painter, isText, labelPlaneMatrix, 
         bucket.icon.dynamicLayoutVertexBuffer.updateData(dynamicLayoutVertexArray);
     }
 }
+/*
+ * Place the first and last glyph of a line label, projected to the label plane.
+ * This function is called both during collision detection (to determine the label's size)
+ * and during line label rendering (to make sure the label fits on the line geometry with
+ * the current camera position, which may differ from the position used during collision detection).
+ *
+ * Calling this function has the effect of populating the "projectionCache" with all projected
+ * vertex locations the label will need, making future calls to placeGlyphAlongLine (for all the
+ * intermediate glyphs) much cheaper.
+ *
+ * Returns null if the label can't fit on the geometry
+ */
 function placeFirstAndLastGlyph(fontScale, glyphOffsetArray, lineOffsetX, lineOffsetY, flip, anchorPoint, tileAnchorPoint, symbol, lineVertexArray, labelPlaneMatrix, projectionCache, rotateToLine, getElevation) {
     const glyphEndIndex = symbol.glyphStartIndex + symbol.numGlyphs;
     const lineStartIndex = symbol.lineStartIndex;
@@ -38548,6 +39586,14 @@ function requiresOrientationChange(writingMode, firstPoint, lastPoint, aspectRat
     }
     return null;
 }
+/*
+* Place first and last glyph along the line projected to label plane, and if they fit
+* iterate through all the intermediate glyphs, calculating their label plane positions
+* from the projected line.
+*
+* Finally, add resulting glyph position calculations to dynamicLayoutVertexArray for
+* upload to the GPU
+*/
 function placeGlyphsAlongLine(symbol, fontSize, flip, keepUpright, posMatrix, labelPlaneMatrix, glCoordMatrix, glyphOffsetArray, lineVertexArray, dynamicLayoutVertexArray, anchorPoint, tileAnchorPoint, projectionCache, aspectRatio, rotateToLine, getElevation) {
     const fontScale = fontSize / 24;
     const lineOffsetX = symbol.lineOffsetX * fontScale;
@@ -38574,7 +39620,6 @@ function placeGlyphsAlongLine(symbol, fontSize, flip, keepUpright, posMatrix, la
         placedGlyphs = [firstAndLastGlyph.first];
         for (let glyphIndex = symbol.glyphStartIndex + 1; glyphIndex < glyphEndIndex - 1; glyphIndex++) {
             // Since first and last glyph fit on the line, we're sure that the rest of the glyphs can be placed
-            // $FlowFixMe
             placedGlyphs.push(placeGlyphAlongLine(fontScale * glyphOffsetArray.getoffsetX(glyphIndex), lineOffsetX, lineOffsetY, flip, anchorPoint, tileAnchorPoint, symbol.segment, lineStartIndex, lineEndIndex, lineVertexArray, labelPlaneMatrix, projectionCache, rotateToLine, getElevation));
         }
         placedGlyphs.push(firstAndLastGlyph.last);
@@ -38585,8 +39630,7 @@ function placeGlyphsAlongLine(symbol, fontSize, flip, keepUpright, posMatrix, la
         if (keepUpright && !flip) {
             const a = project(tileAnchorPoint, posMatrix, getElevation).point;
             const tileVertexIndex = (symbol.lineStartIndex + symbol.segment + 1);
-            // $FlowFixMe
-            const tileSegmentEnd = new performance.pointGeometry(lineVertexArray.getx(tileVertexIndex), lineVertexArray.gety(tileVertexIndex));
+            const tileSegmentEnd = new performance.Point(lineVertexArray.getx(tileVertexIndex), lineVertexArray.gety(tileVertexIndex));
             const projectedVertex = project(tileSegmentEnd, posMatrix, getElevation);
             // We know the anchor will be in the viewport, but the end of the line segment may be
             // behind the plane of the camera, in which case we can use a point at any arbitrary (closer)
@@ -38599,7 +39643,6 @@ function placeGlyphsAlongLine(symbol, fontSize, flip, keepUpright, posMatrix, la
                 return orientationChange;
             }
         }
-        // $FlowFixMe
         const singleGlyph = placeGlyphAlongLine(fontScale * glyphOffsetArray.getoffsetX(symbol.glyphStartIndex), lineOffsetX, lineOffsetY, flip, anchorPoint, tileAnchorPoint, symbol.segment, symbol.lineStartIndex, symbol.lineStartIndex + symbol.lineLength, lineVertexArray, labelPlaneMatrix, projectionCache, rotateToLine, getElevation);
         if (!singleGlyph)
             return { notEnoughRoom: true };
@@ -38619,64 +39662,163 @@ function projectTruncatedLineSegment(previousTilePoint, currentTilePoint, previo
     const projectedUnitSegment = previousProjectedPoint.sub(projectedUnitVertex);
     return previousProjectedPoint.add(projectedUnitSegment._mult(minimumLength / projectedUnitSegment.mag()));
 }
+/**
+ * Transform a vertex from tile coordinates to label plane coordinates
+ * @param index index of vertex to project
+ * @param projectionArgs necessary data to project a vertex
+ * @returns the vertex projected to the label plane
+ */
+function projectVertexToViewport(index, projectionArgs) {
+    const { projectionCache, lineVertexArray, labelPlaneMatrix, tileAnchorPoint, distanceFromAnchor, getElevation, previousVertex, direction, absOffsetX } = projectionArgs;
+    if (projectionCache.projections[index]) {
+        return projectionCache.projections[index];
+    }
+    const currentVertex = new performance.Point(lineVertexArray.getx(index), lineVertexArray.gety(index));
+    const projection = project(currentVertex, labelPlaneMatrix, getElevation);
+    if (projection.signedDistanceFromCamera > 0) {
+        projectionCache.projections[index] = projection.point;
+        return projection.point;
+    }
+    // The vertex is behind the plane of the camera, so we can't project it
+    // Instead, we'll create a vertex along the line that's far enough to include the glyph
+    const previousLineVertexIndex = index - direction;
+    const previousTilePoint = distanceFromAnchor === 0 ?
+        tileAnchorPoint :
+        new performance.Point(lineVertexArray.getx(previousLineVertexIndex), lineVertexArray.gety(previousLineVertexIndex));
+    // Don't cache because the new vertex might not be far enough out for future glyphs on the same segment
+    return projectTruncatedLineSegment(previousTilePoint, currentVertex, previousVertex, absOffsetX - distanceFromAnchor + 1, labelPlaneMatrix, getElevation);
+}
+/**
+ * Calculate the normal vector for a line segment
+ * @param segmentVector will be mutated as a tiny optimization
+ * @param offset magnitude of resulting vector
+ * @param direction direction of line traversal
+ * @returns a normal vector from the segment, with magnitude equal to offset amount
+ */
+function transformToOffsetNormal(segmentVector, offset, direction) {
+    return segmentVector._unit()._perp()._mult(offset * direction);
+}
+/**
+ * Construct offset line segments for the current segment and the next segment, then extend/shrink
+ * the segments until they intersect. If the segments are parallel, then they will touch with no modification.
+ *
+ * @param index Index of the current vertex
+ * @param prevToCurrentOffsetNormal Normal vector of the line segment from the previous vertex to the current vertex
+ * @param currentVertex Current (non-offset) vertex projected to the label plane
+ * @param lineStartIndex Beginning index for the line this label is on
+ * @param lineEndIndex End index for the line this label is on
+ * @param offsetPreviousVertex The previous vertex projected to the label plane, and then offset along the previous segments normal
+ * @param lineOffsetY Magnitude of the offset
+ * @param projectionArgs Necessary data for tile-to-label-plane projection
+ * @returns The point at which the current and next line segments intersect, once offset and extended/shrunk to their meeting point
+ */
+function findOffsetIntersectionPoint(index, prevToCurrentOffsetNormal, currentVertex, lineStartIndex, lineEndIndex, offsetPreviousVertex, lineOffsetY, projectionArgs) {
+    const { projectionCache, direction } = projectionArgs;
+    if (projectionCache.offsets[index]) {
+        return projectionCache.offsets[index];
+    }
+    const offsetCurrentVertex = currentVertex.add(prevToCurrentOffsetNormal);
+    if (index + direction < lineStartIndex || index + direction >= lineEndIndex) {
+        // This is the end of the line, no intersection to calculate
+        projectionCache.offsets[index] = offsetCurrentVertex;
+        return offsetCurrentVertex;
+    }
+    // Offset the vertices for the next segment
+    const nextVertex = projectVertexToViewport(index + direction, projectionArgs);
+    const currentToNextOffsetNormal = transformToOffsetNormal(nextVertex.sub(currentVertex), lineOffsetY, direction);
+    const offsetNextSegmentBegin = currentVertex.add(currentToNextOffsetNormal);
+    const offsetNextSegmentEnd = nextVertex.add(currentToNextOffsetNormal);
+    // find the intersection of these two lines
+    // if the lines are parallel, offsetCurrent/offsetNextBegin will touch
+    projectionCache.offsets[index] = performance.findLineIntersection(offsetPreviousVertex, offsetCurrentVertex, offsetNextSegmentBegin, offsetNextSegmentEnd) || offsetCurrentVertex;
+    return projectionCache.offsets[index];
+}
+/*
+ * Place a single glyph along its line, projected into the label plane, by iterating outward
+ * from the anchor point until the distance traversed in the label plane equals the glyph's
+ * offsetX. Returns null if the glyph can't fit on the line geometry.
+ */
 function placeGlyphAlongLine(offsetX, lineOffsetX, lineOffsetY, flip, anchorPoint, tileAnchorPoint, anchorSegment, lineStartIndex, lineEndIndex, lineVertexArray, labelPlaneMatrix, projectionCache, rotateToLine, getElevation) {
     const combinedOffsetX = flip ?
         offsetX - lineOffsetX :
         offsetX + lineOffsetX;
-    let dir = combinedOffsetX > 0 ? 1 : -1;
+    let direction = combinedOffsetX > 0 ? 1 : -1;
     let angle = 0;
     if (flip) {
         // The label needs to be flipped to keep text upright.
         // Iterate in the reverse direction.
-        dir *= -1;
+        direction *= -1;
         angle = Math.PI;
     }
-    if (dir < 0)
+    if (direction < 0)
         angle += Math.PI;
-    let currentIndex = dir > 0 ?
+    let currentIndex = direction > 0 ?
         lineStartIndex + anchorSegment :
         lineStartIndex + anchorSegment + 1;
-    let current = anchorPoint;
-    let prev = anchorPoint;
-    let distanceToPrev = 0;
+    let currentVertex = anchorPoint;
+    let previousVertex = anchorPoint;
+    // offsetPrev and intersectionPoint are analogous to previousVertex and currentVertex
+    // but if there's a line offset they are calculated in parallel as projection happens
+    let offsetIntersectionPoint;
+    let offsetPreviousVertex;
+    let distanceFromAnchor = 0;
     let currentSegmentDistance = 0;
     const absOffsetX = Math.abs(combinedOffsetX);
     const pathVertices = [];
-    while (distanceToPrev + currentSegmentDistance <= absOffsetX) {
-        currentIndex += dir;
+    let currentLineSegment;
+    while (distanceFromAnchor + currentSegmentDistance <= absOffsetX) {
+        currentIndex += direction;
         // offset does not fit on the projected line
         if (currentIndex < lineStartIndex || currentIndex >= lineEndIndex)
             return null;
-        prev = current;
-        pathVertices.push(current);
-        current = projectionCache[currentIndex];
-        if (current === undefined) {
-            const currentVertex = new performance.pointGeometry(lineVertexArray.getx(currentIndex), lineVertexArray.gety(currentIndex));
-            const projection = project(currentVertex, labelPlaneMatrix, getElevation);
-            if (projection.signedDistanceFromCamera > 0) {
-                current = projectionCache[currentIndex] = projection.point;
+        // accumulate values from last iteration
+        distanceFromAnchor += currentSegmentDistance;
+        previousVertex = currentVertex;
+        offsetPreviousVertex = offsetIntersectionPoint;
+        const projectionArgs = {
+            projectionCache,
+            lineVertexArray,
+            labelPlaneMatrix,
+            tileAnchorPoint,
+            distanceFromAnchor,
+            getElevation,
+            previousVertex,
+            direction,
+            absOffsetX
+        };
+        // find next vertex in viewport space
+        currentVertex = projectVertexToViewport(currentIndex, projectionArgs);
+        if (lineOffsetY === 0) {
+            // Store vertices for collision detection and update current segment geometry
+            pathVertices.push(previousVertex);
+            currentLineSegment = currentVertex.sub(previousVertex);
+        }
+        else {
+            // Calculate the offset for this section
+            let prevToCurrentOffsetNormal;
+            const prevToCurrent = currentVertex.sub(previousVertex);
+            if (prevToCurrent.mag() === 0) {
+                // We are starting with our anchor point directly on the vertex, so look one vertex ahead
+                // to calculate a normal
+                const nextVertex = projectVertexToViewport(currentIndex + direction, projectionArgs);
+                prevToCurrentOffsetNormal = transformToOffsetNormal(nextVertex.sub(currentVertex), lineOffsetY, direction);
             }
             else {
-                // The vertex is behind the plane of the camera, so we can't project it
-                // Instead, we'll create a vertex along the line that's far enough to include the glyph
-                const previousLineVertexIndex = currentIndex - dir;
-                const previousTilePoint = distanceToPrev === 0 ?
-                    tileAnchorPoint :
-                    new performance.pointGeometry(lineVertexArray.getx(previousLineVertexIndex), lineVertexArray.gety(previousLineVertexIndex));
-                // Don't cache because the new vertex might not be far enough out for future glyphs on the same segment
-                current = projectTruncatedLineSegment(previousTilePoint, currentVertex, prev, absOffsetX - distanceToPrev + 1, labelPlaneMatrix, getElevation);
+                prevToCurrentOffsetNormal = transformToOffsetNormal(prevToCurrent, lineOffsetY, direction);
             }
+            // Initialize offsetPrev on our first iteration, after that it will be pre-calculated
+            if (!offsetPreviousVertex)
+                offsetPreviousVertex = previousVertex.add(prevToCurrentOffsetNormal);
+            offsetIntersectionPoint = findOffsetIntersectionPoint(currentIndex, prevToCurrentOffsetNormal, currentVertex, lineStartIndex, lineEndIndex, offsetPreviousVertex, lineOffsetY, projectionArgs);
+            pathVertices.push(offsetPreviousVertex);
+            currentLineSegment = offsetIntersectionPoint.sub(offsetPreviousVertex);
         }
-        distanceToPrev += currentSegmentDistance;
-        currentSegmentDistance = prev.dist(current);
+        currentSegmentDistance = currentLineSegment.mag();
     }
     // The point is on the current segment. Interpolate to find it.
-    const segmentInterpolationT = (absOffsetX - distanceToPrev) / currentSegmentDistance;
-    const prevToCurrent = current.sub(prev);
-    const p = prevToCurrent.mult(segmentInterpolationT)._add(prev);
-    // offset the point from the line to text-offset and icon-offset
-    p._add(prevToCurrent._unit()._perp()._mult(lineOffsetY * dir));
-    const segmentAngle = angle + Math.atan2(current.y - prev.y, current.x - prev.x);
+    const segmentInterpolationT = (absOffsetX - distanceFromAnchor) / currentSegmentDistance;
+    const p = currentLineSegment._mult(segmentInterpolationT)._add(offsetPreviousVertex || previousVertex);
+    const segmentAngle = angle + Math.atan2(currentVertex.y - previousVertex.y, currentVertex.x - previousVertex.x);
     pathVertices.push(p);
     return {
         point: p,
@@ -38759,13 +39901,13 @@ class CollisionIndex {
     }
     placeCollisionCircles(overlapMode, symbol, lineVertexArray, glyphOffsetArray, fontSize, posMatrix, labelPlaneMatrix, labelToScreenMatrix, showCollisionCircles, pitchWithMap, collisionGroupPredicate, circlePixelDiameter, textPixelPadding, getElevation) {
         const placedCollisionCircles = [];
-        const tileUnitAnchorPoint = new performance.pointGeometry(symbol.anchorX, symbol.anchorY);
+        const tileUnitAnchorPoint = new performance.Point(symbol.anchorX, symbol.anchorY);
         const screenAnchorPoint = project(tileUnitAnchorPoint, posMatrix, getElevation);
         const perspectiveRatio = getPerspectiveRatio(this.transform.cameraToCenterDistance, screenAnchorPoint.signedDistanceFromCamera);
         const labelPlaneFontSize = pitchWithMap ? fontSize / perspectiveRatio : fontSize * perspectiveRatio;
         const labelPlaneFontScale = labelPlaneFontSize / performance.ONE_EM;
         const labelPlaneAnchorPoint = project(tileUnitAnchorPoint, labelPlaneMatrix, getElevation).point;
-        const projectionCache = {};
+        const projectionCache = { projections: {}, offsets: {} };
         const lineOffsetX = symbol.lineOffsetX * labelPlaneFontScale;
         const lineOffsetY = symbol.lineOffsetY * labelPlaneFontScale;
         const firstAndLastGlyph = placeFirstAndLastGlyph(labelPlaneFontScale, glyphOffsetArray, lineOffsetX, lineOffsetY, 
@@ -38775,8 +39917,8 @@ class CollisionIndex {
         let entirelyOffscreen = true;
         if (firstAndLastGlyph) {
             const radius = circlePixelDiameter * 0.5 * perspectiveRatio + textPixelPadding;
-            const screenPlaneMin = new performance.pointGeometry(-viewportPadding, -viewportPadding);
-            const screenPlaneMax = new performance.pointGeometry(this.screenRightBoundary, this.screenBottomBoundary);
+            const screenPlaneMin = new performance.Point(-viewportPadding, -viewportPadding);
+            const screenPlaneMax = new performance.Point(this.screenRightBoundary, this.screenBottomBoundary);
             const interpolator = new PathInterpolator();
             // Construct a projected path from projected line vertices. Anchor points are ignored and removed
             const first = firstAndLastGlyph.first;
@@ -38889,7 +40031,7 @@ class CollisionIndex {
         let maxX = -Infinity;
         let maxY = -Infinity;
         for (const point of viewportQueryGeometry) {
-            const gridPoint = new performance.pointGeometry(point.x + viewportPadding, point.y + viewportPadding);
+            const gridPoint = new performance.Point(point.x + viewportPadding, point.y + viewportPadding);
             minX = Math.min(minX, gridPoint.x);
             minY = Math.min(minY, gridPoint.y);
             maxX = Math.max(maxX, gridPoint.x);
@@ -38915,10 +40057,10 @@ class CollisionIndex {
             // distinction doesn't matter as much, and box geometry is easier
             // to work with.
             const bbox = [
-                new performance.pointGeometry(feature.x1, feature.y1),
-                new performance.pointGeometry(feature.x2, feature.y1),
-                new performance.pointGeometry(feature.x2, feature.y2),
-                new performance.pointGeometry(feature.x1, feature.y2)
+                new performance.Point(feature.x1, feature.y1),
+                new performance.Point(feature.x2, feature.y1),
+                new performance.Point(feature.x2, feature.y2),
+                new performance.Point(feature.x1, feature.y2)
             ];
             if (!performance.polygonIntersectsPolygon(query, bbox)) {
                 continue;
@@ -38953,7 +40095,7 @@ class CollisionIndex {
             p = [x, y, 0, 1];
             xyTransformMat4(p, p, posMatrix);
         }
-        const a = new performance.pointGeometry((((p[0] / p[3] + 1) / 2) * this.transform.width) + viewportPadding, (((-p[1] / p[3] + 1) / 2) * this.transform.height) + viewportPadding);
+        const a = new performance.Point((((p[0] / p[3] + 1) / 2) * this.transform.width) + viewportPadding, (((-p[1] / p[3] + 1) / 2) * this.transform.height) + viewportPadding);
         return {
             point: a,
             // See perspective ratio comment in symbol_sdf.vertex
@@ -39074,11 +40216,11 @@ function calculateVariableLayoutShift(anchor, width, height, textOffset, textBox
     const shiftX = -(horizontalAlign - 0.5) * width;
     const shiftY = -(verticalAlign - 0.5) * height;
     const offset = performance.evaluateVariableOffset(anchor, textOffset);
-    return new performance.pointGeometry(shiftX + offset[0] * textBoxScale, shiftY + offset[1] * textBoxScale);
+    return new performance.Point(shiftX + offset[0] * textBoxScale, shiftY + offset[1] * textBoxScale);
 }
 function shiftVariableCollisionBox(collisionBox, shiftX, shiftY, rotateWithMap, pitchWithMap, angle) {
     const { x1, x2, y1, y2, anchorPointX, anchorPointY } = collisionBox;
-    const rotatedOffset = new performance.pointGeometry(shiftX, shiftY);
+    const rotatedOffset = new performance.Point(shiftX, shiftY);
     if (rotateWithMap) {
         rotatedOffset._rotate(pitchWithMap ? angle : -angle);
     }
@@ -39229,6 +40371,8 @@ class Placement {
         if (!bucket.collisionArrays && collisionBoxArray) {
             bucket.deserializeCollisionBoxes(collisionBoxArray);
         }
+        const tileID = this.retainedQueryData[bucket.bucketInstanceId].tileID;
+        const getElevation = this.terrain ? (x, y) => this.terrain.getElevation(tileID, x, y) : null;
         const placeSymbol = (symbolInstance, collisionArrays) => {
             if (seenCrossTileIDs[symbolInstance.crossTileID])
                 return;
@@ -39258,14 +40402,6 @@ class Placement {
             }
             if (collisionArrays.verticalTextFeatureIndex) {
                 verticalTextFeatureIndex = collisionArrays.verticalTextFeatureIndex;
-            }
-            // update elevation of collisionArrays
-            const tileID = this.retainedQueryData[bucket.bucketInstanceId].tileID;
-            const getElevation = this.terrain ? (x, y) => this.terrain.getElevation(tileID, x, y) : null;
-            for (const boxType of ['textBox', 'verticalTextBox', 'iconBox', 'verticalIconBox']) {
-                const box = collisionArrays[boxType];
-                if (box)
-                    box.elevation = getElevation ? getElevation(box.anchorPointX, box.anchorPointY) : 0;
             }
             const textBox = collisionArrays.textBox;
             if (textBox) {
@@ -39717,7 +40853,7 @@ class Placement {
             if (bucket.hasIconCollisionBoxData() || bucket.hasTextCollisionBoxData()) {
                 const collisionArrays = bucket.collisionArrays[s];
                 if (collisionArrays) {
-                    let shift = new performance.pointGeometry(0, 0);
+                    let shift = new performance.Point(0, 0);
                     if (collisionArrays.textBox || collisionArrays.verticalTextBox) {
                         let used = true;
                         if (variablePlacement) {
@@ -39896,8 +41032,7 @@ class PauseablePlacement {
     continuePlacement(order, layers, layerTiles) {
         const startTime = performance.exported.now();
         const shouldPausePlacement = () => {
-            const elapsedTime = performance.exported.now() - startTime;
-            return this._forceFullPlacement ? false : elapsedTime > 2;
+            return this._forceFullPlacement ? false : (performance.exported.now() - startTime) > 2;
         };
         while (this._currentPlacementIndex >= 0) {
             const layerId = order[this._currentPlacementIndex];
@@ -40218,7 +41353,7 @@ class CrossTileSymbolIndex {
 // to continue to allow canvas sources to be added at runtime/updated in
 // smart setStyle (see https://github.com/mapbox/mapbox-gl-js/pull/6424):
 const emitValidationErrors = (evented, errors) => performance.emitValidationErrors(evented, errors && errors.filter(error => error.identifier !== 'source.canvas'));
-const supportedDiffOperations = performance.pick(operations, [
+const supportedDiffOperations = performance.pick(performance.operations, [
     'addLayer',
     'removeLayer',
     'setPaintProperty',
@@ -40233,13 +41368,13 @@ const supportedDiffOperations = performance.pick(operations, [
     'setGlyphs',
     'setSprite',
 ]);
-const ignoredDiffOperations = performance.pick(operations, [
+const ignoredDiffOperations = performance.pick(performance.operations, [
     'setCenter',
     'setZoom',
     'setBearing',
     'setPitch'
 ]);
-const empty = emptyStyle();
+const empty = performance.emptyStyle();
 /**
  * @private
  */
@@ -40255,7 +41390,6 @@ class Style extends performance.Evented {
         this.crossTileSymbolIndex = new CrossTileSymbolIndex();
         this._spritesImagesIds = {};
         this._layers = {};
-        this._serializedLayers = {};
         this._order = [];
         this.sourceCaches = {};
         this.zoomHistory = new performance.ZoomHistory();
@@ -40275,7 +41409,13 @@ class Style extends performance.Evented {
                     const allComplete = results.every((elem) => elem);
                     if (allComplete) {
                         for (const id in self.sourceCaches) {
-                            self.sourceCaches[id].reload(); // Should be a no-op if the plugin loads before any tiles load
+                            const sourceType = self.sourceCaches[id].getSource().type;
+                            if (sourceType === 'vector' || sourceType === 'geojson') {
+                                // Non-vector sources don't have any symbols buckets to reload when the RTL text plugin loads
+                                // They also load more quickly, so they're more likely to have already displaying tiles
+                                // that would be unnecessarily booted by the plugin load event
+                                self.sourceCaches[id].reload(); // Should be a no-op if the plugin loads before any tiles load
+                            }
                         }
                     }
                 }
@@ -40345,21 +41485,26 @@ class Style extends performance.Evented {
             this.imageManager.setLoaded(true);
         }
         this.glyphManager.setURL(nextState.glyphs);
-        const layers = derefLayers(this.stylesheet.layers);
-        this._order = layers.map((layer) => layer.id);
-        this._layers = {};
-        this._serializedLayers = {};
-        for (let layer of layers) {
-            layer = performance.createStyleLayer(layer);
-            layer.setEventedParent(this, { layer: { id: layer.id } });
-            this._layers[layer.id] = layer;
-            this._serializedLayers[layer.id] = layer.serialize();
-        }
-        this.dispatcher.broadcast('setLayers', this._serializeLayers(this._order));
+        this._createLayers();
         this.light = new Light(this.stylesheet.light);
         this.map.setTerrain(this.stylesheet.terrain);
         this.fire(new performance.Event('data', { dataType: 'style' }));
         this.fire(new performance.Event('style.load'));
+    }
+    _createLayers() {
+        const dereferencedLayers = performance.derefLayers(this.stylesheet.layers);
+        // Broadcast layers to workers first, so that expensive style processing (createStyleLayer)
+        // can happen in parallel on both main and worker threads.
+        this.dispatcher.broadcast('setLayers', dereferencedLayers);
+        this._order = dereferencedLayers.map((layer) => layer.id);
+        this._layers = {};
+        // reset serialization field, to be populated only when needed
+        this._serializedLayers = null;
+        for (const layer of dereferencedLayers) {
+            const styledLayer = performance.createStyleLayer(layer);
+            styledLayer.setEventedParent(this, { layer: { id: layer.id } });
+            this._layers[layer.id] = styledLayer;
+        }
     }
     _loadSprite(sprite, isUpdate = false, completion = undefined) {
         this.imageManager.setLoaded(false);
@@ -40445,12 +41590,40 @@ class Style extends performance.Evented {
             return false;
         return true;
     }
-    _serializeLayers(ids) {
+    /**
+     * take an array of string IDs, and based on this._layers, generate an array of LayerSpecification
+     * @param ids an array of string IDs, for which serialized layers will be generated. If omitted, all serialized layers will be returned
+     * @returns {Array<LayerSpecification>} generated result
+     */
+    _serializeByIds(ids) {
+        const serializedLayersDictionary = this._serializedAllLayers();
+        if (!ids || ids.length === 0) {
+            return Object.values(serializedLayersDictionary);
+        }
         const serializedLayers = [];
         for (const id of ids) {
-            const layer = this._layers[id];
+            // this check will skip all custom layers
+            if (serializedLayersDictionary[id]) {
+                serializedLayers.push(serializedLayersDictionary[id]);
+            }
+        }
+        return serializedLayers;
+    }
+    /**
+     * Lazy initialization of this._serializedLayers dictionary and return it
+     * @returns this._serializedLayers dictionary
+     */
+    _serializedAllLayers() {
+        let serializedLayers = this._serializedLayers;
+        if (serializedLayers) {
+            return serializedLayers;
+        }
+        serializedLayers = this._serializedLayers = {};
+        const allLayerIds = Object.keys(this._layers);
+        for (const layerId of allLayerIds) {
+            const layer = this._layers[layerId];
             if (layer.type !== 'custom') {
-                serializedLayers.push(layer.serialize());
+                serializedLayers[layerId] = layer.serialize();
             }
         }
         return serializedLayers;
@@ -40558,7 +41731,7 @@ class Style extends performance.Evented {
     }
     _updateWorkerLayers(updatedIds, removedIds) {
         this.dispatcher.broadcast('updateLayers', {
-            layers: this._serializeLayers(updatedIds),
+            layers: this._serializeByIds(updatedIds),
             removedIds
         });
     }
@@ -40583,12 +41756,13 @@ class Style extends performance.Evented {
      */
     setState(nextState, options = {}) {
         this._checkLoaded();
-        nextState = options.transformStyle ? options.transformStyle(this.serialize(), nextState) : nextState;
+        const serializedStyle = this.serialize();
+        nextState = options.transformStyle ? options.transformStyle(serializedStyle, nextState) : nextState;
         if (emitValidationErrors(this, performance.validateStyle(nextState)))
             return false;
         nextState = performance.clone$1(nextState);
-        nextState.layers = derefLayers(nextState.layers);
-        const changes = diffStyles(this.serialize(), nextState)
+        nextState.layers = performance.derefLayers(nextState.layers);
+        const changes = performance.diffStyles(serializedStyle, nextState)
             .filter(op => !(op.command in ignoredDiffOperations));
         if (changes.length === 0) {
             return false;
@@ -40597,14 +41771,14 @@ class Style extends performance.Evented {
         if (unimplementedOps.length > 0) {
             throw new Error(`Unimplemented: ${unimplementedOps.map(op => op.command).join(', ')}.`);
         }
-        changes.forEach((op) => {
+        for (const op of changes) {
             if (op.command === 'setTransition') {
                 // `transition` is always read directly off of
                 // `this.stylesheet`, which we update below
-                return;
+                continue;
             }
             this[op.command].apply(this, op.args);
-        });
+        }
         this.stylesheet = nextState;
         return true;
     }
@@ -40743,7 +41917,6 @@ class Style extends performance.Evented {
             layer = performance.createStyleLayer(layerObject);
             this._validateLayer(layer);
             layer.setEventedParent(this, { layer: { id } });
-            this._serializedLayers[layer.id] = layer.serialize();
         }
         const index = before ? this._order.indexOf(before) : this._order.length;
         if (before && index === -1) {
@@ -40756,7 +41929,7 @@ class Style extends performance.Evented {
         if (this._removedLayers[id] && layer.source && layer.type !== 'custom') {
             // If, in the current batch, we have already removed this layer
             // and we are now re-adding it with a different `type`, then we
-            // need to clear (rather than just reload) the underyling source's
+            // need to clear (rather than just reload) the underlying source's
             // tiles.  Otherwise, tiles marked 'reloading' will have buckets /
             // buffers that are set up for the _previous_ version of this
             // layer, causing, e.g.:
@@ -40825,7 +41998,9 @@ class Style extends performance.Evented {
         this._changed = true;
         this._removedLayers[id] = layer;
         delete this._layers[id];
-        delete this._serializedLayers[id];
+        if (this._serializedLayers) {
+            delete this._serializedLayers[id];
+        }
         delete this._updatedLayers[id];
         delete this._updatedPaintProps[id];
         if (layer.onRemove) {
@@ -41007,20 +42182,23 @@ class Style extends performance.Evented {
         return performance.extend({ duration: 300, delay: 0 }, this.stylesheet && this.stylesheet.transition);
     }
     serialize() {
+        const sources = performance.mapObject(this.sourceCaches, (source) => source.serialize());
+        const layers = this._serializeByIds(this._order);
+        const myStyleSheet = this.stylesheet;
         return performance.filterObject({
-            version: this.stylesheet.version,
-            name: this.stylesheet.name,
-            metadata: this.stylesheet.metadata,
-            light: this.stylesheet.light,
-            center: this.stylesheet.center,
-            zoom: this.stylesheet.zoom,
-            bearing: this.stylesheet.bearing,
-            pitch: this.stylesheet.pitch,
-            sprite: this.stylesheet.sprite,
-            glyphs: this.stylesheet.glyphs,
-            transition: this.stylesheet.transition,
-            sources: performance.mapObject(this.sourceCaches, (source) => source.serialize()),
-            layers: this._serializeLayers(this._order)
+            version: myStyleSheet.version,
+            name: myStyleSheet.name,
+            metadata: myStyleSheet.metadata,
+            light: myStyleSheet.light,
+            center: myStyleSheet.center,
+            zoom: myStyleSheet.zoom,
+            bearing: myStyleSheet.bearing,
+            pitch: myStyleSheet.pitch,
+            sprite: myStyleSheet.sprite,
+            glyphs: myStyleSheet.glyphs,
+            transition: myStyleSheet.transition,
+            sources,
+            layers
         }, (value) => { return value !== undefined; });
     }
     _updateLayer(layer) {
@@ -41031,6 +42209,9 @@ class Style extends performance.Evented {
             this._updatedSources[layer.source] = 'reload';
             this.sourceCaches[layer.source].pause();
         }
+        // upon updating, serilized layer dictionary should be reset.
+        // When needed, it will be populated with the correct copy again.
+        this._serializedLayers = null;
         this._changed = true;
     }
     _flattenAndSortRenderedFeatures(sourceResults) {
@@ -41118,15 +42299,17 @@ class Style extends performance.Evented {
         }
         const sourceResults = [];
         params.availableImages = this._availableImages;
+        // LayerSpecification is serialized StyleLayer, and this casting is safe.
+        const serializedLayers = this._serializedAllLayers();
         for (const id in this.sourceCaches) {
             if (params.layers && !includedSources[id])
                 continue;
-            sourceResults.push(queryRenderedFeatures(this.sourceCaches[id], this._layers, this._serializedLayers, queryGeometry, params, transform));
+            sourceResults.push(queryRenderedFeatures(this.sourceCaches[id], this._layers, serializedLayers, queryGeometry, params, transform));
         }
         if (this.placement) {
             // If a placement has run, query against its CollisionIndex
             // for symbol results, and treat it as an extra source to merge
-            sourceResults.push(queryRenderedSymbols(this._layers, this._serializedLayers, this.sourceCaches, queryGeometry, params, this.placement.collisionIndex, this.placement.retainedQueryData));
+            sourceResults.push(queryRenderedSymbols(this._layers, serializedLayers, this.sourceCaches, queryGeometry, params, this.placement.collisionIndex, this.placement.retainedQueryData));
         }
         return this._flattenAndSortRenderedFeatures(sourceResults);
     }
@@ -41183,7 +42366,7 @@ class Style extends performance.Evented {
             key,
             style: this.serialize(),
             value,
-            styleSpec: performance.spec
+            styleSpec: performance.v8Spec
         }, props)));
     }
     _remove(mapRemoved = true) {
@@ -41296,7 +42479,7 @@ class Style extends performance.Evented {
     getImages(mapId, params, callback) {
         this.imageManager.getImages(params.icons, callback);
         // Apply queued image changes before setting the tile's dependencies so that the tile
-        // is not reloaded unecessarily. Without this forced update the reload could happen in cases
+        // is not reloaded unnecessarily. Without this forced update the reload could happen in cases
         // like this one:
         // - icons contains "my-image"
         // - imageManager.getImages(...) triggers `onstyleimagemissing`
@@ -41394,7 +42577,7 @@ class Style extends performance.Evented {
      *
      * @param {SpriteSpecification} sprite new sprite value
      * @param {StyleSetterOptions} [options] style setter options
-     * @param completion completion handler
+     * @param [completion] completion handler
      */
     setSprite(sprite, options = {}, completion) {
         this._checkLoaded();
@@ -41407,7 +42590,9 @@ class Style extends performance.Evented {
         }
         else {
             this._unloadSprite();
-            completion(null);
+            if (completion) {
+                completion(null);
+            }
         }
     }
 }
@@ -41967,7 +43152,7 @@ class Program {
         context.setStencilMode(stencilMode);
         context.setColorMode(colorMode);
         context.setCullFace(cullFaceMode);
-        // set varaibles used by the 3d functions defined in _prelude.vertex.glsl
+        // set variables used by the 3d functions defined in _prelude.vertex.glsl
         if (terrain) {
             context.activeTexture.set(gl.TEXTURE2);
             gl.bindTexture(gl.TEXTURE_2D, terrain.depthTexture);
@@ -42675,7 +43860,7 @@ const AttributeType = {
 };
 /**
  * The `VertexBuffer` class turns a `StructArray` into a WebGL buffer. Each member of the StructArray's
- * Struct type is converted to a WebGL atribute.
+ * Struct type is converted to a WebGL attribute.
  * @private
  */
 class VertexBuffer {
@@ -43224,9 +44409,22 @@ class DepthAttachment extends FramebufferAttachment {
         this.dirty = false;
     }
 }
+class DepthStencilAttachment extends FramebufferAttachment {
+    set(v) {
+        if (v === this.current && !this.dirty)
+            return;
+        this.context.bindFramebuffer.set(this.parent);
+        // note: it's possible to attach a texture to the depth attachment
+        // point, but thus far MBGL only uses renderbuffers for depth
+        const gl = this.gl;
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, gl.RENDERBUFFER, v);
+        this.current = v;
+        this.dirty = false;
+    }
+}
 
 class Framebuffer {
-    constructor(context, width, height, hasDepth) {
+    constructor(context, width, height, hasDepth, hasStencil) {
         this.context = context;
         this.width = width;
         this.height = height;
@@ -43234,7 +44432,10 @@ class Framebuffer {
         const fbo = this.framebuffer = gl.createFramebuffer();
         this.colorAttachment = new ColorAttachment(context, fbo);
         if (hasDepth) {
-            this.depthAttachment = new DepthAttachment(context, fbo);
+            this.depthAttachment = hasStencil ? new DepthStencilAttachment(context, fbo) : new DepthAttachment(context, fbo);
+        }
+        else if (hasStencil) {
+            throw new Error('Stencil cannot be setted without depth');
         }
         if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
             throw new Error('Framebuffer is not complete');
@@ -43395,10 +44596,10 @@ class Context {
         this.bindRenderbuffer.set(null);
         return rbo;
     }
-    createFramebuffer(width, height, hasDepth) {
-        return new Framebuffer(this, width, height, hasDepth);
+    createFramebuffer(width, height, hasDepth, hasStencil) {
+        return new Framebuffer(this, width, height, hasDepth, hasStencil);
     }
-    clear({ color, depth }) {
+    clear({ color, depth, stencil }) {
         const gl = this.gl;
         let mask = 0;
         if (color) {
@@ -43409,17 +44610,16 @@ class Context {
         if (typeof depth !== 'undefined') {
             mask |= gl.DEPTH_BUFFER_BIT;
             // Workaround for platforms where clearDepth doesn't seem to work
-            // without reseting the depthRange. See https://github.com/mapbox/mapbox-gl-js/issues/3437
+            // without resetting the depthRange. See https://github.com/mapbox/mapbox-gl-js/issues/3437
             this.depthRange.set([0, 1]);
             this.clearDepth.set(depth);
             this.depthMask.set(true);
         }
-        // See note in Painter#clearStencil: implement this the easy way once GPU bug/workaround is fixed upstream
-        // if (typeof stencil !== 'undefined') {
-        //     mask |= gl.STENCIL_BUFFER_BIT;
-        //     this.clearStencil.set(stencil);
-        //     this.stencilMask.set(0xFF);
-        // }
+        if (typeof stencil !== 'undefined') {
+            mask |= gl.STENCIL_BUFFER_BIT;
+            this.clearStencil.set(stencil);
+            this.stencilMask.set(0xFF);
+        }
         gl.clear(mask);
     }
     setCullFace(cullFaceMode) {
@@ -43539,7 +44739,7 @@ function drawCollisionDebug(painter, sourceCache, layer, coords, translate, tran
         const circleArray = bucket.collisionCircleArray;
         if (circleArray.length > 0) {
             // We need to know the projection matrix that was used for projecting collision circles to the screen.
-            // This might vary between buckets as the symbol placement is a continous process. This matrix is
+            // This might vary between buckets as the symbol placement is a continuous process. This matrix is
             // required for transforming points from previous screen space to the current one
             const invTransform = performance.create();
             const transform = posMatrix;
@@ -43643,7 +44843,7 @@ function calculateVariableRenderShift(anchor, width, height, textOffset, textBox
     const shiftX = -(horizontalAlign - 0.5) * width;
     const shiftY = -(verticalAlign - 0.5) * height;
     const variableOffset = performance.evaluateVariableOffset(anchor, textOffset);
-    return new performance.pointGeometry((shiftX / textBoxScale + variableOffset[0]) * renderTextSize, (shiftY / textBoxScale + variableOffset[1]) * renderTextSize);
+    return new performance.Point((shiftX / textBoxScale + variableOffset[0]) * renderTextSize, (shiftY / textBoxScale + variableOffset[1]) * renderTextSize);
 }
 function updateVariableAnchors(coords, painter, layer, sourceCache, rotationAlignment, pitchAlignment, variableOffsets) {
     const tr = painter.transform;
@@ -43682,7 +44882,7 @@ function updateVariableAnchorsForBucket(bucket, rotateWithMap, pitchWithMap, var
             hideGlyphs(symbol.numGlyphs, dynamicTextLayoutVertexArray);
         }
         else {
-            const tileAnchor = new performance.pointGeometry(symbol.anchorX, symbol.anchorY);
+            const tileAnchor = new performance.Point(symbol.anchorX, symbol.anchorY);
             const projectedAnchor = project(tileAnchor, pitchWithMap ? posMatrix : labelPlaneMatrix, getElevation);
             const perspectiveRatio = getPerspectiveRatio(transform.cameraToCenterDistance, projectedAnchor.signedDistanceFromCamera);
             let renderTextSize = performance.evaluateSizeForFeature(bucket.textSizeData, size, symbol) * perspectiveRatio / performance.ONE_EM;
@@ -43865,10 +45065,12 @@ function drawLayerSymbols(painter, sourceCache, layer, coords, isText, translate
     for (const segmentState of tileRenderState) {
         const state = segmentState.state;
         context.activeTexture.set(gl.TEXTURE0);
+        // @ts-ignore
         state.atlasTexture.bind(state.atlasInterpolation, gl.CLAMP_TO_EDGE);
         if (state.atlasTextureIcon) {
             context.activeTexture.set(gl.TEXTURE1);
             if (state.atlasTextureIcon) {
+                // @ts-ignore
                 state.atlasTextureIcon.bind(state.atlasInterpolationIcon, gl.CLAMP_TO_EDGE);
             }
         }
@@ -44005,7 +45207,7 @@ function bindFramebuffer(context, painter, layer) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        fbo = layer.heatmapFbo = context.createFramebuffer(painter.width / 4, painter.height / 4, false);
+        fbo = layer.heatmapFbo = context.createFramebuffer(painter.width / 4, painter.height / 4, false, false);
         bindTextureToFramebuffer(context, painter, texture, fbo);
     }
     else {
@@ -44143,7 +45345,7 @@ function drawLine(painter, sourceCache, layer, coords) {
  * The mismatch was causing setConstantPatternPositions method not being called and pixelRatio was always the
  * default of 1, instead of actual values set by original map.addImage.
  *
- * @param programConfiguration - to be used to set patttern poistion and device pixel ratio.
+ * @param programConfiguration - to be used to set pattern position and device pixel ratio.
  * @param propertyName - 'fill-pattern' or 'fill-extrusion-pattern' property key
  * @param constantPattern - either 'fill-pattern' or 'fill-extrusion-pattern' property value
  * @param tile - current tile being drawn
@@ -44365,7 +45567,7 @@ function prepareHillshade(painter, tile, layer, depthMode, stencilMode, colorMod
         if (!fbo) {
             const renderTexture = new Texture(context, { width: tileSize, height: tileSize, data: null }, gl.RGBA);
             renderTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
-            fbo = tile.fbo = context.createFramebuffer(tileSize, tileSize, true);
+            fbo = tile.fbo = context.createFramebuffer(tileSize, tileSize, true, false);
             fbo.colorAttachment.set(renderTexture.texture);
         }
         context.bindFramebuffer.set(fbo.framebuffer);
@@ -44557,8 +45759,6 @@ function drawDebugTile(painter, sourceCache, coord) {
     const id = '$debug';
     const terrainData = painter.style.map.terrain && painter.style.map.terrain.getTerrainData(coord);
     context.activeTexture.set(gl.TEXTURE0);
-    // Bind the empty texture for drawing outlines
-    painter.emptyTexture.bind(gl.LINEAR, gl.CLAMP_TO_EDGE);
     const tileRawData = sourceCache.getTileByID(coord.key).latestRawTileData;
     const tileByteLength = (tileRawData && tileRawData.byteLength) || 0;
     const tileSizeKb = Math.floor(tileByteLength / 1024);
@@ -44811,11 +46011,6 @@ class Painter {
         quadTriangleIndices.emplaceBack(0, 1, 2);
         quadTriangleIndices.emplaceBack(2, 1, 3);
         this.quadTriangleIndexBuffer = context.createIndexBuffer(quadTriangleIndices);
-        this.emptyTexture = new Texture(context, {
-            width: 1,
-            height: 1,
-            data: new Uint8Array([0, 0, 0, 0])
-        }, context.gl.RGBA);
         const gl = this.context.gl;
         this.stencilClearMode = new StencilMode({ func: gl.ALWAYS, mask: 0 }, 0x0, 0xFF, gl.ZERO, gl.ZERO, gl.ZERO);
     }
@@ -45191,7 +46386,6 @@ class Painter {
         }
     }
     destroy() {
-        this.emptyTexture.destroy();
         if (this.debugOverlayTexture) {
             this.debugOverlayTexture.destroy();
         }
@@ -45345,13 +46539,13 @@ class EdgeInsets {
      */
     interpolate(start, target, t) {
         if (target.top != null && start.top != null)
-            this.top = performance.number(start.top, target.top, t);
+            this.top = performance.interpolate.number(start.top, target.top, t);
         if (target.bottom != null && start.bottom != null)
-            this.bottom = performance.number(start.bottom, target.bottom, t);
+            this.bottom = performance.interpolate.number(start.bottom, target.bottom, t);
         if (target.left != null && start.left != null)
-            this.left = performance.number(start.left, target.left, t);
+            this.left = performance.interpolate.number(start.left, target.left, t);
         if (target.right != null && start.right != null)
-            this.right = performance.number(start.right, target.right, t);
+            this.right = performance.interpolate.number(start.right, target.right, t);
         return this;
     }
     /**
@@ -45367,7 +46561,7 @@ class EdgeInsets {
         // Clamp insets so they never overflow width/height and always calculate a valid center
         const x = performance.clamp((this.left + width - this.right) / 2, 0, width);
         const y = performance.clamp((this.top + height - this.bottom) / 2, 0, height);
-        return new performance.pointGeometry(x, y);
+        return new performance.Point(x, y);
     }
     equals(other) {
         return this.top === other.top &&
@@ -45486,7 +46680,7 @@ class Transform {
         return this.centerPoint._sub(this.size._div(2));
     }
     get size() {
-        return new performance.pointGeometry(this.width, this.height);
+        return new performance.Point(this.width, this.height);
     }
     get bearing() {
         return -this.angle / Math.PI * 180;
@@ -45584,7 +46778,7 @@ class Transform {
         return this._edgeInsets.equals(padding);
     }
     /**
-     * Helper method to upadte edge-insets inplace
+     * Helper method to update edge-insets in place
      *
      * @param {PaddingOptions} start the starting padding
      * @param {PaddingOptions} target the target padding
@@ -45618,10 +46812,10 @@ class Transform {
     getVisibleUnwrappedCoordinates(tileID) {
         const result = [new performance.UnwrappedTileID(0, tileID)];
         if (this._renderWorldCopies) {
-            const utl = this.pointCoordinate(new performance.pointGeometry(0, 0));
-            const utr = this.pointCoordinate(new performance.pointGeometry(this.width, 0));
-            const ubl = this.pointCoordinate(new performance.pointGeometry(this.width, this.height));
-            const ubr = this.pointCoordinate(new performance.pointGeometry(0, this.height));
+            const utl = this.pointCoordinate(new performance.Point(0, 0));
+            const utr = this.pointCoordinate(new performance.Point(this.width, 0));
+            const ubl = this.pointCoordinate(new performance.Point(this.width, this.height));
+            const ubr = this.pointCoordinate(new performance.Point(0, this.height));
             const w0 = Math.floor(Math.min(utl.x, utr.x, ubl.x, ubr.x));
             const w1 = Math.floor(Math.max(utl.x, utr.x, ubl.x, ubr.x));
             // Add an extra copy of the world on each side to properly render ImageSources and CanvasSources.
@@ -45755,7 +46949,7 @@ class Transform {
     scaleZoom(scale) { return Math.log(scale) / Math.LN2; }
     project(lnglat) {
         const lat = performance.clamp(lnglat.lat, -this.maxValidLatitude, this.maxValidLatitude);
-        return new performance.pointGeometry(performance.mercatorXfromLng(lnglat.lng) * this.worldSize, performance.mercatorYfromLat(lat) * this.worldSize);
+        return new performance.Point(performance.mercatorXfromLng(lnglat.lng) * this.worldSize, performance.mercatorYfromLat(lat) * this.worldSize);
     }
     unproject(point) {
         return new performance.MercatorCoordinate(point.x / this.worldSize, point.y / this.worldSize).toLngLat();
@@ -45777,7 +46971,7 @@ class Transform {
      * @returns {number} elevation in meters
      */
     getElevation(lnglat, terrain) {
-        const merc = performance.MercatorCoordinate.fromLngLat(lnglat);
+        const merc = performance.MercatorCoordinate.fromLngLat(lnglat.wrap());
         const worldSize = (1 << this.tileZoom) * performance.EXTENT;
         const mercX = merc.x * worldSize, mercY = merc.y * worldSize;
         const tileX = Math.floor(mercX / performance.EXTENT), tileY = Math.floor(mercY / performance.EXTENT);
@@ -45885,7 +47079,7 @@ class Transform {
                 return coordinate;
             }
         }
-        // calcuate point-coordinate on flat earth
+        // calculate point-coordinate on flat earth
         const targetZ = 0;
         // since we don't know the correct projected z value for the point,
         // unproject two points to get a line and then find the point on that
@@ -45903,7 +47097,7 @@ class Transform {
         const z0 = coord0[2] / w0;
         const z1 = coord1[2] / w1;
         const t = z0 === z1 ? 0 : (targetZ - z0) / (z1 - z0);
-        return new performance.MercatorCoordinate(performance.number(x0, x1, t) / this.worldSize, performance.number(y0, y1, t) / this.worldSize);
+        return new performance.MercatorCoordinate(performance.interpolate.number(x0, x1, t) / this.worldSize, performance.interpolate.number(y0, y1, t) / this.worldSize);
     }
     /**
      * Given a coordinate, return the screen point that corresponds to it
@@ -45916,7 +47110,7 @@ class Transform {
     coordinatePoint(coord, elevation = 0, pixelMatrix = this.pixelMatrix) {
         const p = [coord.x * this.worldSize, coord.y * this.worldSize, elevation, 1];
         performance.transformMat4(p, p, pixelMatrix);
-        return new performance.pointGeometry(p[0] / p[3], p[1] / p[3]);
+        return new performance.Point(p[0] / p[3], p[1] / p[3]);
     }
     /**
      * Returns the map's geographical bounds. When the bearing or pitch is non-zero, the visible region is not
@@ -45925,11 +47119,11 @@ class Transform {
      */
     getBounds() {
         const top = Math.max(0, this.height / 2 - this.getHorizon());
-        return new performance.LngLatBounds()
-            .extend(this.pointLocation(new performance.pointGeometry(0, top)))
-            .extend(this.pointLocation(new performance.pointGeometry(this.width, top)))
-            .extend(this.pointLocation(new performance.pointGeometry(this.width, this.height)))
-            .extend(this.pointLocation(new performance.pointGeometry(0, this.height)));
+        return new LngLatBounds()
+            .extend(this.pointLocation(new performance.Point(0, top)))
+            .extend(this.pointLocation(new performance.Point(this.width, top)))
+            .extend(this.pointLocation(new performance.Point(this.width, this.height)))
+            .extend(this.pointLocation(new performance.Point(0, this.height)));
     }
     /**
      * Returns the maximum geographical bounds the map is constrained to, or `null` if none set.
@@ -45939,7 +47133,7 @@ class Transform {
         if (!this.latRange || this.latRange.length !== 2 ||
             !this.lngRange || this.lngRange.length !== 2)
             return null;
-        return new performance.LngLatBounds([this.lngRange[0], this.latRange[0]], [this.lngRange[1], this.latRange[1]]);
+        return new LngLatBounds([this.lngRange[0], this.latRange[0]], [this.lngRange[1], this.latRange[1]]);
     }
     /**
      * Calculate pixel height of the visible horizon in relation to map-center (e.g. height/2),
@@ -46017,7 +47211,7 @@ class Transform {
         // how much the map should scale to fit the screen into given latitude/longitude ranges
         const s = Math.max(sx || 0, sy || 0);
         if (s) {
-            this.center = this.unproject(new performance.pointGeometry(sx ? (maxX + minX) / 2 : point.x, sy ? (maxY + minY) / 2 : point.y));
+            this.center = this.unproject(new performance.Point(sx ? (maxX + minX) / 2 : point.x, sy ? (maxY + minY) / 2 : point.y));
             this.zoom += this.scaleZoom(s);
             this._unmodified = unmodified;
             this._constraining = false;
@@ -46041,7 +47235,7 @@ class Transform {
         }
         // pan the map if the screen goes off the range
         if (x2 !== undefined || y2 !== undefined) {
-            this.center = this.unproject(new performance.pointGeometry(x2 !== undefined ? x2 : point.x, y2 !== undefined ? y2 : point.y)).wrap();
+            this.center = this.unproject(new performance.Point(x2 !== undefined ? x2 : point.x, y2 !== undefined ? y2 : point.y)).wrap();
         }
         this._unmodified = unmodified;
         this._constraining = false;
@@ -46137,7 +47331,7 @@ class Transform {
         // calcMatrices hasn't run yet
         if (!this.pixelMatrixInverse)
             return 1;
-        const coord = this.pointCoordinate(new performance.pointGeometry(0, 0));
+        const coord = this.pointCoordinate(new performance.Point(0, 0));
         const p = [coord.x * this.worldSize, coord.y * this.worldSize, 0, 1];
         const topPoint = performance.transformMat4(p, p, this.pixelMatrix);
         return topPoint[3] / this.cameraToCenterDistance;
@@ -46156,7 +47350,7 @@ class Transform {
     getCameraPoint() {
         const pitch = this._pitch;
         const yOffset = Math.tan(pitch) * (this.cameraToCenterDistance || 1);
-        return this.centerPoint.add(new performance.pointGeometry(0, yOffset));
+        return this.centerPoint.add(new performance.Point(0, yOffset));
     }
     /*
      * When the map is pitched, some of the 3D features that intersect a query will not intersect
@@ -46185,11 +47379,11 @@ class Transform {
                 maxY = Math.max(maxY, p.y);
             }
             return [
-                new performance.pointGeometry(minX, minY),
-                new performance.pointGeometry(maxX, minY),
-                new performance.pointGeometry(maxX, maxY),
-                new performance.pointGeometry(minX, maxY),
-                new performance.pointGeometry(minX, minY)
+                new performance.Point(minX, minY),
+                new performance.Point(maxX, minY),
+                new performance.Point(maxX, maxY),
+                new performance.Point(minX, maxY),
+                new performance.Point(minX, minY)
             ];
         }
     }
@@ -46384,7 +47578,7 @@ class HandlerInertia {
             zoom: 0,
             bearing: 0,
             pitch: 0,
-            pan: new performance.pointGeometry(0, 0),
+            pan: new performance.Point(0, 0),
             pinchAround: undefined,
             around: undefined
         };
@@ -46530,7 +47724,7 @@ class MapTouchEvent extends performance.Event {
         const lngLats = points.map((t) => map.unproject(t));
         const point = points.reduce((prev, curr, i, arr) => {
             return prev.add(curr.div(arr.length));
-        }, new performance.pointGeometry(0, 0));
+        }, new performance.Point(0, 0));
         const lngLat = map.unproject(point);
         super(type, { points, point, lngLats, lngLat, originalEvent });
         this._defaultPrevented = false;
@@ -46822,7 +48016,7 @@ function indexTouches(touches, points) {
 }
 
 function getCentroid(points) {
-    const sum = new performance.pointGeometry(0, 0);
+    const sum = new performance.Point(0, 0);
     for (const point of points) {
         sum._add(point);
     }
@@ -47209,7 +48403,7 @@ class TouchPanHandler {
     reset() {
         this._active = false;
         this._touches = {};
-        this._sum = new performance.pointGeometry(0, 0);
+        this._sum = new performance.Point(0, 0);
         // Put a delay on the cooperative gesture message so it's less twitchy
         setTimeout(() => {
             this._cancelCooperativeMessage = false;
@@ -47247,8 +48441,8 @@ class TouchPanHandler {
         if (mapTouches.length > 0)
             this._active = true;
         const touches = indexTouches(mapTouches, points);
-        const touchPointSum = new performance.pointGeometry(0, 0);
-        const touchDeltaSum = new performance.pointGeometry(0, 0);
+        const touchPointSum = new performance.Point(0, 0);
+        const touchDeltaSum = new performance.Point(0, 0);
         let touchDeltaCount = 0;
         for (const identifier in touches) {
             const point = touches[identifier];
@@ -47776,7 +48970,7 @@ class ScrollZoomHandler {
         if (!this.isEnabled())
             return;
         if (this._map._cooperativeGestures) {
-            if (this._map._metaPress) {
+            if (e[this._map._metaKey]) {
                 e.preventDefault();
             }
             else {
@@ -47892,7 +49086,7 @@ class ScrollZoomHandler {
         if (this._type === 'wheel' && startZoom && easing) {
             const t = Math.min((performance.exported.now() - this._lastWheelEventTime) / 200, 1);
             const k = easing(t);
-            zoom = performance.number(startZoom, targetZoom, k);
+            zoom = performance.interpolate.number(startZoom, targetZoom, k);
             if (t < 1) {
                 if (!this._frameId) {
                     this._frameId = true;
@@ -48563,7 +49757,7 @@ class HandlerManager {
         const combinedDeactivatedHandlers = {};
         for (const [change, eventsInProgress, deactivatedHandlers] of this._changes) {
             if (change.panDelta)
-                combined.panDelta = (combined.panDelta || new performance.pointGeometry(0, 0))._add(change.panDelta);
+                combined.panDelta = (combined.panDelta || new performance.Point(0, 0))._add(change.panDelta);
             if (change.zoomDelta)
                 combined.zoomDelta = (combined.zoomDelta || 0) + change.zoomDelta;
             if (change.bearingDelta)
@@ -48608,7 +49802,7 @@ class HandlerManager {
         }
         else {
             // when 3d-terrain is enabled act a little different:
-            //    - draging do not drag the picked point itself, instead it drags the map by pixel-delta.
+            //    - dragging do not drag the picked point itself, instead it drags the map by pixel-delta.
             //      With this approach it is no longer possible to pick a point from somewhere near
             //      the horizon to the center in one move.
             //      So this logic avoids the problem, that in such cases you easily loose orientation.
@@ -48787,7 +49981,7 @@ class Camera extends performance.Evented {
      * @see [Navigate the map with game-like controls](https://maplibre.org/maplibre-gl-js-docs/example/game-controls/)
      */
     panBy(offset, options, eventData) {
-        offset = performance.pointGeometry.convert(offset).mult(-1);
+        offset = performance.Point.convert(offset).mult(-1);
         return this.panTo(this.transform.center, performance.extend({ offset }, options), eventData);
     }
     /**
@@ -49058,15 +50252,15 @@ class Camera extends performance.Evented {
     /**
      * @memberof Map#
      * @param {LngLatBoundsLike} bounds Calculate the center for these bounds in the viewport and use
-     *      the highest zoom level up to and including `Map#getMaxZoom()` that fits
-     *      in the viewport. LngLatBounds represent a box that is always axis-aligned with bearing 0.
+     * the highest zoom level up to and including `Map#getMaxZoom()` that fits
+     * in the viewport. LngLatBounds represent a box that is always axis-aligned with bearing 0.
      * @param options Options object
      * @param {number | PaddingOptions} [options.padding] The amount of padding in pixels to add to the given bounds.
      * @param {number} [options.bearing=0] Desired map bearing at end of animation, in degrees.
      * @param {PointLike} [options.offset=[0, 0]] The center of the given bounds relative to the map's center, measured in pixels.
      * @param {number} [options.maxZoom] The maximum zoom level to allow when the camera would transition to the specified bounds.
      * @returns {CenterZoomBearing} If map is able to fit to provided bounds, returns `center`, `zoom`, and `bearing`.
-     *      If map is unable to fit, method will warn and return undefined.
+     * If map is unable to fit, method will warn and return undefined.
      * @example
      * var bbox = [[-79, 43], [-73, 45]];
      * var newCameraTransform = map.cameraForBounds(bbox, {
@@ -49074,7 +50268,7 @@ class Camera extends performance.Evented {
      * });
      */
     cameraForBounds(bounds, options) {
-        bounds = performance.LngLatBounds.convert(bounds);
+        bounds = LngLatBounds.convert(bounds);
         const bearing = options && options.bearing || 0;
         return this._cameraForBoxAndBearing(bounds.getNorthWest(), bounds.getSouthEast(), bearing, options);
     }
@@ -49131,8 +50325,8 @@ class Camera extends performance.Evented {
         const p1world = tr.project(performance.LngLat.convert(p1));
         const p0rotated = p0world.rotate(-bearing * Math.PI / 180);
         const p1rotated = p1world.rotate(-bearing * Math.PI / 180);
-        const upperRight = new performance.pointGeometry(Math.max(p0rotated.x, p1rotated.x), Math.max(p0rotated.y, p1rotated.y));
-        const lowerLeft = new performance.pointGeometry(Math.min(p0rotated.x, p1rotated.x), Math.min(p0rotated.y, p1rotated.y));
+        const upperRight = new performance.Point(Math.max(p0rotated.x, p1rotated.x), Math.max(p0rotated.y, p1rotated.y));
+        const lowerLeft = new performance.Point(Math.min(p0rotated.x, p1rotated.x), Math.min(p0rotated.y, p1rotated.y));
         // Calculate zoom: consider the original bbox and padding.
         const size = upperRight.sub(lowerLeft);
         const scaleX = (tr.width - (edgePadding.left + edgePadding.right + options.padding.left + options.padding.right)) / size.x;
@@ -49143,10 +50337,10 @@ class Camera extends performance.Evented {
         }
         const zoom = Math.min(tr.scaleZoom(tr.scale * Math.min(scaleX, scaleY)), options.maxZoom);
         // Calculate center: apply the zoom, the configured offset, as well as offset that exists as a result of padding.
-        const offset = performance.pointGeometry.convert(options.offset);
+        const offset = performance.Point.convert(options.offset);
         const paddingOffsetX = (options.padding.left - options.padding.right) / 2;
         const paddingOffsetY = (options.padding.top - options.padding.bottom) / 2;
-        const paddingOffset = new performance.pointGeometry(paddingOffsetX, paddingOffsetY);
+        const paddingOffset = new performance.Point(paddingOffsetX, paddingOffsetY);
         const rotatedPaddingOffset = paddingOffset.rotate(bearing * Math.PI / 180);
         const offsetAtInitialZoom = offset.add(rotatedPaddingOffset);
         const offsetAtFinalZoom = offsetAtInitialZoom.mult(tr.scale / tr.zoomScale(zoom));
@@ -49163,12 +50357,12 @@ class Camera extends performance.Evented {
      *
      * @memberof Map#
      * @param bounds Center these bounds in the viewport and use the highest
-     *      zoom level up to and including `Map#getMaxZoom()` that fits them in the viewport.
+     * zoom level up to and including `Map#getMaxZoom()` that fits them in the viewport.
      * @param {FitBoundsOptions} [options] Options supports all properties from {@link AnimationOptions} and {@link CameraOptions} in addition to the fields below.
      * @param {number | PaddingOptions} [options.padding] The amount of padding in pixels to add to the given bounds.
      * @param {boolean} [options.linear=false] If `true`, the map transitions using
-     *     {@link Map#easeTo}. If `false`, the map transitions using {@link Map#flyTo}. See
-     *     those functions and {@link AnimationOptions} for information about options available.
+     * {@link Map#easeTo}. If `false`, the map transitions using {@link Map#flyTo}. See
+     * those functions and {@link AnimationOptions} for information about options available.
      * @param {Function} [options.easing] An easing function for the animated transition. See {@link AnimationOptions}.
      * @param {PointLike} [options.offset=[0, 0]] The center of the given bounds relative to the map's center, measured in pixels.
      * @param {number} [options.maxZoom] The maximum zoom level to allow when the map view transitions to the specified bounds.
@@ -49198,8 +50392,8 @@ class Camera extends performance.Evented {
      * @param options Options object
      * @param {number | PaddingOptions} [options.padding] The amount of padding in pixels to add to the given bounds.
      * @param {boolean} [options.linear=false] If `true`, the map transitions using
-     *     {@link Map#easeTo}. If `false`, the map transitions using {@link Map#flyTo}. See
-     *     those functions and {@link AnimationOptions} for information about options available.
+     * {@link Map#easeTo}. If `false`, the map transitions using {@link Map#flyTo}. See
+     * those functions and {@link AnimationOptions} for information about options available.
      * @param {Function} [options.easing] An easing function for the animated transition. See {@link AnimationOptions}.
      * @param {PointLike} [options.offset=[0, 0]] The center of the given bounds relative to the map's center, measured in pixels.
      * @param {number} [options.maxZoom] The maximum zoom level to allow when the map view transitions to the specified bounds.
@@ -49216,14 +50410,14 @@ class Camera extends performance.Evented {
      * @see Used by {@link BoxZoomHandler}
      */
     fitScreenCoordinates(p0, p1, bearing, options, eventData) {
-        return this._fitInternal(this._cameraForBoxAndBearing(this.transform.pointLocation(performance.pointGeometry.convert(p0)), this.transform.pointLocation(performance.pointGeometry.convert(p1)), bearing, options), options, eventData);
+        return this._fitInternal(this._cameraForBoxAndBearing(this.transform.pointLocation(performance.Point.convert(p0)), this.transform.pointLocation(performance.Point.convert(p1)), bearing, options), options, eventData);
     }
     _fitInternal(calculatedOptions, options, eventData) {
         // cameraForBounds warns + returns undefined if unable to fit:
         if (!calculatedOptions)
             return this;
         options = performance.extend(calculatedOptions, options);
-        // Explictly remove the padding field because, calculatedOptions already accounts for padding by setting zoom and center accordingly.
+        // Explicitly remove the padding field because, calculatedOptions already accounts for padding by setting zoom and center accordingly.
         delete options.padding;
         return options.linear ?
             this.easeTo(options, eventData) :
@@ -49339,12 +50533,12 @@ class Camera extends performance.Evented {
      * details not specified in `options`.
      *
      * Note: The transition will happen instantly if the user has enabled
-     * the `reduced motion` accesibility feature enabled in their operating system,
+     * the `reduced motion` accessibility feature enabled in their operating system,
      * unless `options` includes `essential: true`.
      *
      * @memberof Map#
      * @param options Options describing the destination and animation of the transition.
-     *            Accepts {@link CameraOptions} and {@link AnimationOptions}.
+     * Accepts {@link CameraOptions} and {@link AnimationOptions}.
      * @param eventData Additional properties to be added to event objects of events triggered by this method.
      * @fires movestart
      * @fires zoomstart
@@ -49369,7 +50563,7 @@ class Camera extends performance.Evented {
         if (options.animate === false || (!options.essential && performance.exported.prefersReducedMotion))
             options.duration = 0;
         const tr = this.transform, startZoom = this.getZoom(), startBearing = this.getBearing(), startPitch = this.getPitch(), startPadding = this.getPadding(), zoom = 'zoom' in options ? +options.zoom : startZoom, bearing = 'bearing' in options ? this._normalizeBearing(options.bearing, startBearing) : startBearing, pitch = 'pitch' in options ? +options.pitch : startPitch, padding = 'padding' in options ? options.padding : tr.padding;
-        const offsetAsPoint = performance.pointGeometry.convert(options.offset);
+        const offsetAsPoint = performance.Point.convert(options.offset);
         let pointAtOffset = tr.centerPoint.add(offsetAsPoint);
         const locationAtOffset = tr.pointLocation(pointAtOffset);
         const center = performance.LngLat.convert(options.center || locationAtOffset);
@@ -49398,17 +50592,17 @@ class Camera extends performance.Evented {
             this._prepareElevation(center);
         this._ease((k) => {
             if (this._zooming) {
-                tr.zoom = performance.number(startZoom, zoom, k);
+                tr.zoom = performance.interpolate.number(startZoom, zoom, k);
             }
             if (this._rotating) {
-                tr.bearing = performance.number(startBearing, bearing, k);
+                tr.bearing = performance.interpolate.number(startBearing, bearing, k);
             }
             if (this._pitching) {
-                tr.pitch = performance.number(startPitch, pitch, k);
+                tr.pitch = performance.interpolate.number(startPitch, pitch, k);
             }
             if (this._padding) {
                 tr.interpolatePadding(startPadding, padding, k);
-                // When padding is being applied, Transform#centerPoint is changing continously,
+                // When padding is being applied, Transform#centerPoint is changing continuously,
                 // thus we need to recalculate offsetPoint every frame
                 pointAtOffset = tr.centerPoint.add(offsetAsPoint);
             }
@@ -49464,7 +50658,7 @@ class Camera extends performance.Evented {
             this._elevationStart += k * (pitch1 - pitch2);
             this._elevationTarget = elevation;
         }
-        this.transform.elevation = performance.number(this._elevationStart, this._elevationTarget, k);
+        this.transform.elevation = performance.interpolate.number(this._elevationStart, this._elevationTarget, k);
     }
     _finalizeElevation() {
         this.transform.freezeElevation = false;
@@ -49514,30 +50708,30 @@ class Camera extends performance.Evented {
      * the user maintain her bearings even after traversing a great distance.
      *
      * Note: The animation will be skipped, and this will behave equivalently to `jumpTo`
-     * if the user has the `reduced motion` accesibility feature enabled in their operating system,
+     * if the user has the `reduced motion` accessibility feature enabled in their operating system,
      * unless 'options' includes `essential: true`.
      *
      * @memberof Map#
      * @param {FlyToOptions} options Options describing the destination and animation of the transition.
-     *     Accepts {@link CameraOptions}, {@link AnimationOptions},
-     *     and the following additional options.
+     * Accepts {@link CameraOptions}, {@link AnimationOptions},
+     * and the following additional options.
      * @param {number} [options.curve=1.42] The zooming "curve" that will occur along the
-     *     flight path. A high value maximizes zooming for an exaggerated animation, while a low
-     *     value minimizes zooming for an effect closer to {@link Map#easeTo}. 1.42 is the average
-     *     value selected by participants in the user study discussed in
-     *     [van Wijk (2003)](https://www.win.tue.nl/~vanwijk/zoompan.pdf). A value of
-     *     `Math.pow(6, 0.25)` would be equivalent to the root mean squared average velocity. A
-     *     value of 1 would produce a circular motion.
+     * flight path. A high value maximizes zooming for an exaggerated animation, while a low
+     * value minimizes zooming for an effect closer to {@link Map#easeTo}. 1.42 is the average
+     * value selected by participants in the user study discussed in
+     * [van Wijk (2003)](https://www.win.tue.nl/~vanwijk/zoompan.pdf). A value of
+     * `Math.pow(6, 0.25)` would be equivalent to the root mean squared average velocity. A
+     * value of 1 would produce a circular motion.
      * @param {number} [options.minZoom] The zero-based zoom level at the peak of the flight path. If
-     *     `options.curve` is specified, this option is ignored.
+     * `options.curve` is specified, this option is ignored.
      * @param {number} [options.speed=1.2] The average speed of the animation defined in relation to
-     *     `options.curve`. A speed of 1.2 means that the map appears to move along the flight path
-     *     by 1.2 times `options.curve` screenfuls every second. A _screenful_ is the map's visible span.
-     *     It does not correspond to a fixed physical distance, but varies by zoom level.
+     * `options.curve`. A speed of 1.2 means that the map appears to move along the flight path
+     * by 1.2 times `options.curve` screenfuls every second. A _screenful_ is the map's visible span.
+     * It does not correspond to a fixed physical distance, but varies by zoom level.
      * @param {number} [options.screenSpeed] The average speed of the animation measured in screenfuls
-     *     per second, assuming a linear timing curve. If `options.speed` is specified, this option is ignored.
+     * per second, assuming a linear timing curve. If `options.speed` is specified, this option is ignored.
      * @param {number} [options.maxDuration] The animation's maximum duration, measured in milliseconds.
-     *     If duration exceeds maximum duration, it resets to 0.
+     * If duration exceeds maximum duration, it resets to 0.
      * @param eventData Additional properties to be added to event objects of events triggered by this method.
      * @fires movestart
      * @fires zoomstart
@@ -49593,7 +50787,7 @@ class Camera extends performance.Evented {
         const pitch = 'pitch' in options ? +options.pitch : startPitch;
         const padding = 'padding' in options ? options.padding : tr.padding;
         const scale = tr.zoomScale(zoom - startZoom);
-        const offsetAsPoint = performance.pointGeometry.convert(options.offset);
+        const offsetAsPoint = performance.Point.convert(options.offset);
         let pointAtOffset = tr.centerPoint.add(offsetAsPoint);
         const locationAtOffset = tr.pointLocation(pointAtOffset);
         const center = performance.LngLat.convert(options.center || locationAtOffset);
@@ -49677,14 +50871,14 @@ class Camera extends performance.Evented {
             const scale = 1 / w(s);
             tr.zoom = k === 1 ? zoom : startZoom + tr.scaleZoom(scale);
             if (this._rotating) {
-                tr.bearing = performance.number(startBearing, bearing, k);
+                tr.bearing = performance.interpolate.number(startBearing, bearing, k);
             }
             if (this._pitching) {
-                tr.pitch = performance.number(startPitch, pitch, k);
+                tr.pitch = performance.interpolate.number(startPitch, pitch, k);
             }
             if (this._padding) {
                 tr.interpolatePadding(startPadding, padding, k);
-                // When padding is being applied, Transform#centerPoint is changing continously,
+                // When padding is being applied, Transform#centerPoint is changing continuously,
                 // thus we need to recalculate offsetPoint every frame
                 pointAtOffset = tr.centerPoint.add(offsetAsPoint);
             }
@@ -49777,6 +50971,25 @@ class Camera extends performance.Evented {
         center.lng +=
             delta > 180 ? -360 :
                 delta < -180 ? 360 : 0;
+    }
+    /**
+     * Query the current elevation of location. It return null if terrain is not enabled. the elevation is in meters relative to mean sea-level
+     * @memberof Map#
+     * @param lngLatLike [x,y] or LngLat coordinates of the location
+     * @returns {number} elevation in meters
+     */
+    queryTerrainElevation(lngLatLike) {
+        if (!this.terrain) {
+            return null;
+        }
+        const elevation = this.transform.getElevation(performance.LngLat.convert(lngLatLike), this.terrain);
+        /**
+         * Different zoomlevels with different terrain-tiles the elvation-values are not the same.
+         * map.transform.elevation variable with the center-altitude.
+         * In maplibre the proj-matrix is translated by this value in negative z-direction.
+         * So we need to add this value to the elevation to get the correct value.
+         */
+        return elevation - this.transform.elevation;
     }
 }
 // In debug builds, check that camera change events are fired in the correct order.
@@ -50248,12 +51461,12 @@ class TerrainSourceCache extends performance.Evented {
 }
 
 /**
- * This is the main class which handles most of the 3D Terrain logic. It has the follwing topics:
+ * This is the main class which handles most of the 3D Terrain logic. It has the following topics:
  *    1) loads raster-dem tiles via the internal sourceCache this.sourceCache
  *    2) creates a depth-framebuffer, which is used to calculate the visibility of coordinates
  *    3) creates a coords-framebuffer, which is used the get to tile-coordinate for a screen-pixel
  *    4) stores all render-to-texture tiles in the this.sourceCache._tiles
- *    5) calculates the elevation for a spezific tile-coordinate
+ *    5) calculates the elevation for a specific tile-coordinate
  *    6) creates a terrain-mesh
  *
  *    A note about the GPU resource-usage:
@@ -50307,7 +51520,7 @@ class Terrain {
             const tr = terrain.tile.dem.get(c[0], c[1] + 1);
             const bl = terrain.tile.dem.get(c[0] + 1, c[1]);
             const br = terrain.tile.dem.get(c[0] + 1, c[1] + 1);
-            elevation = performance.number(performance.number(tl, tr, coord[0] - c[0]), performance.number(bl, br, coord[0] - c[0]), coord[1] - c[1]);
+            elevation = performance.interpolate.number(performance.interpolate.number(tl, tr, coord[0] - c[0]), performance.interpolate.number(bl, br, coord[0] - c[0]), coord[1] - c[1]);
         }
         return elevation;
     }
@@ -50328,8 +51541,8 @@ class Terrain {
      * @returns {TerrainData} the terrain data to use in the program
      */
     getTerrainData(tileID) {
-        // create empty DEM Obejcts, which will used while raster-dem tiles are loading.
-        // creates an empty depth-buffer texture which is needed, during the initialisation process of the 3d mesh..
+        // create empty DEM Objects, which will used while raster-dem tiles are loading.
+        // creates an empty depth-buffer texture which is needed, during the initialization process of the 3d mesh..
         if (!this._emptyDemTexture) {
             const context = this.painter.context;
             const image = new performance.RGBAImage({ width: 1, height: 1 }, new Uint8Array(1 * 4));
@@ -50407,7 +51620,7 @@ class Terrain {
             this._fboDepthTexture.bind(painter.context.gl.NEAREST, painter.context.gl.CLAMP_TO_EDGE);
         }
         if (!this._fbo) {
-            this._fbo = painter.context.createFramebuffer(width, height, true);
+            this._fbo = painter.context.createFramebuffer(width, height, true, false);
             this._fbo.depthAttachment.set(painter.context.createRenderbuffer(painter.context.gl.DEPTH_COMPONENT16, width, height));
         }
         this._fbo.colorAttachment.set(texture === 'coords' ? this._fboCoordsTexture.texture : this._fboDepthTexture.texture);
@@ -50564,10 +51777,10 @@ class RenderPool {
         }
     }
     _createObject(id) {
-        const fbo = this._context.createFramebuffer(this._tileSize, this._tileSize, true);
+        const fbo = this._context.createFramebuffer(this._tileSize, this._tileSize, true, true);
         const texture = new Texture(this._context, { width: this._tileSize, height: this._tileSize, data: null }, this._context.gl.RGBA);
         texture.bind(this._context.gl.LINEAR, this._context.gl.CLAMP_TO_EDGE);
-        fbo.depthAttachment.set(this._context.createRenderbuffer(this._context.gl.DEPTH_COMPONENT16, this._tileSize, this._tileSize));
+        fbo.depthAttachment.set(this._context.createRenderbuffer(this._context.gl.DEPTH_STENCIL, this._tileSize, this._tileSize));
         fbo.colorAttachment.set(texture.texture);
         return { id, fbo, texture, stamp: -1, inUse: false };
     }
@@ -50728,7 +51941,8 @@ class RenderToTexture {
                 tile.rtt[stack] = { id: obj.id, stamp: obj.stamp };
                 // prepare PoolObject for rendering
                 painter.context.bindFramebuffer.set(obj.fbo.framebuffer);
-                painter.context.clear({ color: performance.Color.transparent });
+                painter.context.clear({ color: performance.Color.transparent, stencil: 0 });
+                painter.currentStencilSource = undefined;
                 for (let l = 0; l < layers.length; l++) {
                     const layer = painter.style._layers[layers[l]];
                     const coords = layer.source ? this._coordsDescendingInv[layer.source][tile.tileID.key] : [tile.tileID];
@@ -50790,7 +52004,8 @@ const defaultOptions$4 = {
     localIdeographFontFamily: 'sans-serif',
     transformRequest: null,
     fadeDuration: 300,
-    crossSourceCollisions: true
+    crossSourceCollisions: true,
+    validateStyle: true
 };
 /**
  * The `Map` object represents the map on your page. It exposes methods
@@ -50809,19 +52024,19 @@ const defaultOptions$4 = {
  * @param {number} [options.minPitch=0] The minimum pitch of the map (0-85). Values greater than 60 degrees are experimental and may result in rendering issues. If you encounter any, please raise an issue with details in the MapLibre project.
  * @param {number} [options.maxPitch=60] The maximum pitch of the map (0-85). Values greater than 60 degrees are experimental and may result in rendering issues. If you encounter any, please raise an issue with details in the MapLibre project.
  * @param {Object|string} [options.style] The map's MapLibre style. This must be an a JSON object conforming to
- * the schema described in the [MapLibre Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/), or a URL to
+ * the schema described in the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/), or a URL to
  * such JSON.
  *
  *
  * @param {(boolean|string)} [options.hash=false] If `true`, the map's position (zoom, center latitude, center longitude, bearing, and pitch) will be synced with the hash fragment of the page's URL.
- *   For example, `http://path/to/my/page.html#2.59/39.26/53.07/-24.1/60`.
- *   An additional string may optionally be provided to indicate a parameter-styled hash,
- *   e.g. http://path/to/my/page.html#map=2.59/39.26/53.07/-24.1/60&foo=bar, where foo
- *   is a custom parameter and bar is an arbitrary hash distinct from the map hash.
+ * For example, `http://path/to/my/page.html#2.59/39.26/53.07/-24.1/60`.
+ * An additional string may optionally be provided to indicate a parameter-styled hash,
+ * e.g. http://path/to/my/page.html#map=2.59/39.26/53.07/-24.1/60&foo=bar, where foo
+ * is a custom parameter and bar is an arbitrary hash distinct from the map hash.
  * @param {boolean} [options.interactive=true] If `false`, no mouse, touch, or keyboard listeners will be attached to the map, so it will not respond to interaction.
  * @param {number} [options.bearingSnap=7] The threshold, measured in degrees, that determines when the map's
- *   bearing will snap to north. For example, with a `bearingSnap` of 7, if the user rotates
- *   the map within 7 degrees of north, the map will automatically snap to exact north.
+ * bearing will snap to north. For example, with a `bearingSnap` of 7, if the user rotates
+ * the map within 7 degrees of north, the map will automatically snap to exact north.
  * @param {boolean} [options.pitchWithRotate=true] If `false`, the map's pitch (tilt) control with "drag to rotate" interaction will be disabled.
  * @param {number} [options.clickTolerance=3] The max number of pixels a user can shift the mouse pointer during a click for it to be considered a valid click (as opposed to a mouse drag).
  * @param {boolean} [options.attributionControl=true] If `true`, an {@link AttributionControl} will be added to the map.
@@ -50829,7 +52044,7 @@ const defaultOptions$4 = {
  * @param {boolean} [options.maplibreLogo=false] If `true`, the MapLibre logo will be shown.
  * @param {string} [options.logoPosition='bottom-left'] A string representing the position of the MapLibre wordmark on the map. Valid options are `top-left`,`top-right`, `bottom-left`, `bottom-right`.
  * @param {boolean} [options.failIfMajorPerformanceCaveat=false] If `true`, map creation will fail if the performance of MapLibre
- *   GL JS would be dramatically worse than expected (i.e. a software renderer would be used).
+ * GL JS would be dramatically worse than expected (i.e. a software renderer would be used).
  * @param {boolean} [options.preserveDrawingBuffer=false] If `true`, the map's canvas can be exported to a PNG using `map.getCanvas().toDataURL()`. This is `false` by default as a performance optimization.
  * @param {boolean} [options.antialias] If `true`, the gl context will be created with MSAA antialiasing, which can be useful for antialiasing custom layers. this is `false` by default as a performance optimization.
  * @param {boolean} [options.refreshExpiredTiles=true] If `false`, the map won't attempt to re-request tiles once they expire per their HTTP `cacheControl`/`expires` headers.
@@ -50842,13 +52057,7 @@ const defaultOptions$4 = {
  * @param {boolean} [options.doubleClickZoom=true] If `true`, the "double click to zoom" interaction is enabled (see {@link DoubleClickZoomHandler}).
  * @param {boolean|Object} [options.touchZoomRotate=true] If `true`, the "pinch to rotate and zoom" interaction is enabled. An `Object` value is passed as options to {@link TwoFingersTouchZoomRotateHandler#enable}.
  * @param {boolean|Object} [options.touchPitch=true] If `true`, the "drag to pitch" interaction is enabled. An `Object` value is passed as options to {@link TwoFingersTouchPitchHandler#enable}.
- * @param {boolean|GestureOptions} [options.cooperativeGestures=undefined] If `true` or set to an options object, map is only accessible on desktop while holding Command/Ctrl and only accessible on mobile with two fingers. Interacting with the map using normal gestures will trigger an informational screen. With this option enabled, "drag to pitch" requires a three-finger gesture.
- * A valid options object includes the following properties to customize the text on the informational screen. The values below are the defaults.
- * {
- *   windowsHelpText: "Use Ctrl + scroll to zoom the map",
- *   macHelpText: "Use ⌘ + scroll to zoom the map",
- *   mobileHelpText: "Use two fingers to move the map",
- * }
+ * @param {boolean|GestureOptions} [options.cooperativeGestures=undefined] If `true` or set to an options object, map is only accessible on desktop while holding Command/Ctrl and only accessible on mobile with two fingers. Interacting with the map using normal gestures will trigger an informational screen. With this option enabled, "drag to pitch" requires a three-finger gesture. Cooperative gestures are disabled when a map enters fullscreen using {@link #FullscreenControl}.
  * @param {boolean} [options.trackResize=true] If `true`, the map will automatically resize when the browser window resizes.
  * @param {LngLatLike} [options.center=[0, 0]] The initial geographical centerpoint of the map. If `center` is not specified in the constructor options, MapLibre GL JS will look for it in the map's style object. If it is not specified in the style, either, it will default to `[0, 0]` Note: MapLibre GL uses longitude, latitude coordinate order (as opposed to latitude, longitude) to match GeoJSON.
  * @param {number} [options.zoom=0] The initial zoom level of the map. If `zoom` is not specified in the constructor options, MapLibre GL JS will look for it in the map's style object. If it is not specified in the style, either, it will default to `0`.
@@ -50862,13 +52071,14 @@ const defaultOptions$4 = {
  * - Features that cross 180 and -180 degrees longitude will be cut in two (with one portion on the right edge of the
  * map and the other on the left edge of the map) at every zoom level.
  * @param {number} [options.maxTileCacheSize=null] The maximum number of tiles stored in the tile cache for a given source. If omitted, the cache will be dynamically sized based on the current viewport.
+ * @param {string} [options.validateStyle=true] If false, style validation will be skipped. Useful in production environment.
  * @param {string} [options.localIdeographFontFamily='sans-serif'] Defines a CSS
- *   font-family for locally overriding generation of glyphs in the 'CJK Unified Ideographs', 'Hiragana', 'Katakana' and 'Hangul Syllables' ranges.
- *   In these ranges, font settings from the map's style will be ignored, except for font-weight keywords (light/regular/medium/bold).
- *   Set to `false`, to enable font settings from the map's style for these glyph ranges.
- *   The purpose of this option is to avoid bandwidth-intensive glyph server requests. (See [Use locally generated ideographs](https://maplibre.org/maplibre-gl-js-docs/example/local-ideographs).)
+ * font-family for locally overriding generation of glyphs in the 'CJK Unified Ideographs', 'Hiragana', 'Katakana' and 'Hangul Syllables' ranges.
+ * In these ranges, font settings from the map's style will be ignored, except for font-weight keywords (light/regular/medium/bold).
+ * Set to `false`, to enable font settings from the map's style for these glyph ranges.
+ * The purpose of this option is to avoid bandwidth-intensive glyph server requests. (See [Use locally generated ideographs](https://maplibre.org/maplibre-gl-js-docs/example/local-ideographs).)
  * @param {RequestTransformFunction} [options.transformRequest=null] A callback run before the Map makes a request for an external URL. The callback can be used to modify the url, set headers, or set the credentials property for cross-origin requests.
- *   Expected to return an object with a `url` property and optionally `headers` and `credentials` properties.
+ * Expected to return an object with a `url` property and optionally `headers` and `credentials` properties.
  * @param {boolean} [options.collectResourceTiming=false] If `true`, Resource Timing API information will be collected for requests made by GeoJSON and Vector Tile web workers (this information is normally inaccessible from the main Javascript thread). Information will be returned in a `resourceTiming` property of relevant `data` events.
  * @param {number} [options.fadeDuration=300] Controls the duration of the fade-in/fade-out animation for label collisions, in milliseconds. This setting affects all symbol layers. This setting does not affect the duration of runtime styling transitions or raster tile cross-fading.
  * @param {boolean} [options.crossSourceCollisions=true] If `true`, symbols from multiple sources can collide with each other during collision detection. If `false`, collision detection is run separately for the symbols in each source.
@@ -50914,6 +52124,7 @@ let Map$1 = class Map extends Camera {
         super(transform, { bearingSnap: options.bearingSnap });
         this._interactive = options.interactive;
         this._cooperativeGestures = options.cooperativeGestures;
+        this._metaKey = navigator.platform.indexOf('Mac') === 0 ? 'metaKey' : 'ctrlKey';
         this._maxTileCacheSize = options.maxTileCacheSize;
         this._failIfMajorPerformanceCaveat = options.failIfMajorPerformanceCaveat;
         this._preserveDrawingBuffer = options.preserveDrawingBuffer;
@@ -50950,8 +52161,8 @@ let Map$1 = class Map extends Camera {
         }
         performance.bindAll([
             '_onWindowOnline',
-            '_onWindowResize',
             '_onMapScroll',
+            '_cooperativeGesturesOnWheel',
             '_contextLost',
             '_contextRestored'
         ], this);
@@ -50966,8 +52177,12 @@ let Map$1 = class Map extends Camera {
         });
         if (typeof window !== 'undefined') {
             addEventListener('online', this._onWindowOnline, false);
-            addEventListener('resize', this._onWindowResize, false);
-            addEventListener('orientationchange', this._onWindowResize, false);
+            this._resizeObserver = new ResizeObserver((entries) => {
+                if (this._trackResize) {
+                    this.resize(entries)._update();
+                }
+            });
+            this._resizeObserver.observe(this._container);
         }
         this.handlers = new HandlerManager(this, options);
         if (this._cooperativeGestures) {
@@ -50990,6 +52205,7 @@ let Map$1 = class Map extends Camera {
         }
         this.resize();
         this._localIdeographFontFamily = options.localIdeographFontFamily;
+        this._validateStyle = options.validateStyle;
         if (options.style)
             this.setStyle(options.style, { localIdeographFontFamily: options.localIdeographFontFamily });
         if (options.attributionControl)
@@ -51110,8 +52326,8 @@ let Map$1 = class Map extends Camera {
      * or when the map is shown after being initially hidden with CSS.
      *
      * @param eventData Additional properties to be passed to `movestart`, `move`, `resize`, and `moveend`
-     *   events that get triggered as a result of resize. This can be useful for differentiating the
-     *   source of an event (for example, user-initiated or programmatically-triggered events).
+     * events that get triggered as a result of resize. This can be useful for differentiating the
+     * source of an event (for example, user-initiated or programmatically-triggered events).
      * @returns {Map} `this`
      * @example
      * // Resize the map when the map container is shown
@@ -51197,7 +52413,7 @@ let Map$1 = class Map extends Camera {
      * map.setMaxBounds(bounds);
      */
     setMaxBounds(bounds) {
-        this.transform.setMaxBounds(performance.LngLatBounds.convert(bounds));
+        this.transform.setMaxBounds(LngLatBounds.convert(bounds));
         return this._update();
     }
     /**
@@ -51211,7 +52427,7 @@ let Map$1 = class Map extends Camera {
      * no matter what the `minZoom` is set to.
      *
      * @param {number | null | undefined} minZoom The minimum zoom level to set (-2 - 24).
-     *   If `null` or `undefined` is provided, the function removes the current minimum zoom (i.e. sets it to -2).
+     * If `null` or `undefined` is provided, the function removes the current minimum zoom (i.e. sets it to -2).
      * @returns {Map} `this`
      * @example
      * map.setMinZoom(12.25);
@@ -51242,7 +52458,7 @@ let Map$1 = class Map extends Camera {
      * the map will zoom to the new maximum.
      *
      * @param {number | null | undefined} maxZoom The maximum zoom level to set.
-     *   If `null` or `undefined` is provided, the function removes the current maximum zoom (sets it to 22).
+     * If `null` or `undefined` is provided, the function removes the current maximum zoom (sets it to 22).
      * @returns {Map} `this`
      * @example
      * map.setMaxZoom(18.75);
@@ -51273,7 +52489,7 @@ let Map$1 = class Map extends Camera {
      * the map will pitch to the new minimum.
      *
      * @param {number | null | undefined} minPitch The minimum pitch to set (0-85). Values greater than 60 degrees are experimental and may result in rendering issues. If you encounter any, please raise an issue with details in the MapLibre project.
-     *   If `null` or `undefined` is provided, the function removes the current minimum pitch (i.e. sets it to 0).
+     * If `null` or `undefined` is provided, the function removes the current minimum pitch (i.e. sets it to 0).
      * @returns {Map} `this`
      */
     setMinPitch(minPitch) {
@@ -51303,7 +52519,7 @@ let Map$1 = class Map extends Camera {
      * the map will pitch to the new maximum.
      *
      * @param {number | null | undefined} maxPitch The maximum pitch to set (0-85). Values greater than 60 degrees are experimental and may result in rendering issues. If you encounter any, please raise an issue with details in the MapLibre project.
-     *   If `null` or `undefined` is provided, the function removes the current maximum pitch (sets it to 60).
+     * If `null` or `undefined` is provided, the function removes the current maximum pitch (sets it to 60).
      * @returns {Map} `this`
      */
     setMaxPitch(maxPitch) {
@@ -51359,6 +52575,30 @@ let Map$1 = class Map extends Camera {
         return this._update();
     }
     /**
+     * Gets the map's cooperativeGestures option
+     *
+     * @returns {GestureOptions} gestureOptions
+     */
+    getCooperativeGestures() {
+        return this._cooperativeGestures;
+    }
+    /**
+     * Sets or clears the map's cooperativeGestures option
+     *
+     * @param {GestureOptions | null | undefined} gestureOptions If `true` or set to an options object, map is only accessible on desktop while holding Command/Ctrl and only accessible on mobile with two fingers. Interacting with the map using normal gestures will trigger an informational screen. With this option enabled, "drag to pitch" requires a three-finger gesture.
+     * @returns {Map} `this`
+     */
+    setCooperativeGestures(gestureOptions) {
+        this._cooperativeGestures = gestureOptions;
+        if (this._cooperativeGestures) {
+            this._setupCooperativeGestures();
+        }
+        else {
+            this._destroyCooperativeGestures();
+        }
+        return this;
+    }
+    /**
      * Returns a [Point](https://github.com/mapbox/point-geometry) representing pixel coordinates, relative to the map's `container`,
      * that correspond to the specified geographical location.
      *
@@ -51384,7 +52624,7 @@ let Map$1 = class Map extends Camera {
      * });
      */
     unproject(point) {
-        return this.transform.pointLocation(performance.pointGeometry.convert(point), this.terrain);
+        return this.transform.pointLocation(performance.Point.convert(point), this.terrain);
     }
     /**
      * Returns true if the map is panning, zooming, rotating, or pitching due to a camera animation or user gesture.
@@ -51523,10 +52763,10 @@ let Map$1 = class Map extends Camera {
      * map viewport.
      * The geometryOrOptions can receive a QueryRenderedFeaturesOptions only to support a situation where the function receives only one parameter which is the options parameter.
      * @param {QueryRenderedFeaturesOptions} [options] (optional) Options object.
-     * @param {Array<string>} [options.layers] (optional) An array of [style layer IDs](https://maplibre.org/maplibre-gl-js-docs/style-spec/#layer-id) for the query to inspect.
-     *   Only features within these layers will be returned. If this parameter is undefined, all layers will be checked.
-     * @param {FilterSpecification} [options.filter] (optional) A [filter](https://maplibre.org/maplibre-gl-js-docs/style-spec/layers/#filter)
-     *   to limit query results.
+     * @param {Array<string>} [options.layers] (optional) An array of [style layer IDs](https://maplibre.org/maplibre-style-spec/#layer-id) for the query to inspect.
+     * Only features within these layers will be returned. If this parameter is undefined, all layers will be checked.
+     * @param {FilterSpecification} [options.filter] (optional) A [filter](https://maplibre.org/maplibre-style-spec/layers/#filter)
+     * to limit query results.
      * @param {Array<string>} [options.availableImages] (optional) An array of string representing the available images
      * @param {boolean} [options.validate=true] (optional) Whether to check if the [options.filter] conforms to the MapLibre GL Style Specification. Disabling validation is a performance optimization that should only be used if you have previously validated the values you will be passing to this function.
      *
@@ -51594,16 +52834,16 @@ let Map$1 = class Map extends Camera {
             return [];
         }
         let queryGeometry;
-        const isGeometry = geometryOrOptions instanceof performance.pointGeometry || Array.isArray(geometryOrOptions);
+        const isGeometry = geometryOrOptions instanceof performance.Point || Array.isArray(geometryOrOptions);
         const geometry = isGeometry ? geometryOrOptions : [[0, 0], [this.transform.width, this.transform.height]];
         options = options || (isGeometry ? {} : geometryOrOptions) || {};
-        if (geometry instanceof performance.pointGeometry || typeof geometry[0] === 'number') {
-            queryGeometry = [performance.pointGeometry.convert(geometry)];
+        if (geometry instanceof performance.Point || typeof geometry[0] === 'number') {
+            queryGeometry = [performance.Point.convert(geometry)];
         }
         else {
-            const tl = performance.pointGeometry.convert(geometry[0]);
-            const br = performance.pointGeometry.convert(geometry[1]);
-            queryGeometry = [tl, new performance.pointGeometry(br.x, tl.y), br, new performance.pointGeometry(tl.x, br.y), tl];
+            const tl = performance.Point.convert(geometry[0]);
+            const br = performance.Point.convert(geometry[1]);
+            queryGeometry = [tl, new performance.Point(br.x, tl.y), br, new performance.Point(tl.x, br.y), tl];
         }
         return this.style.queryRenderedFeatures(queryGeometry, options, this.transform);
     }
@@ -51614,9 +52854,9 @@ let Map$1 = class Map extends Camera {
      * @param {string} sourceId The ID of the vector tile or GeoJSON source to query.
      * @param {Object} [parameters] Options object.
      * @param {string} [parameters.sourceLayer] The name of the source layer
-     *   to query. *For vector tile sources, this parameter is required.* For GeoJSON sources, it is ignored.
-     * @param {Array} [parameters.filter] A [filter](https://maplibre.org/maplibre-gl-js-docs/style-spec/layers/#filter)
-     *   to limit query results.
+     * to query. *For vector tile sources, this parameter is required.* For GeoJSON sources, it is ignored.
+     * @param {Array} [parameters.filter] A [filter](https://maplibre.org/maplibre-style-spec/layers/#filter)
+     * to limit query results.
      * @param {boolean} [parameters.validate=true] Whether to check if the [parameters.filter] conforms to the MapLibre GL Style Specification. Disabling validation is a performance optimization that should only be used if you have previously validated the values you will be passing to this function.
      *
      * @returns {Array<MapGeoJSONFeature>} An array of MapGeoJSONFeature objects.
@@ -51655,17 +52895,18 @@ let Map$1 = class Map extends Camera {
      *
      *
      * @param style A JSON object conforming to the schema described in the
-     *   [MapLibre Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/), or a URL to such JSON.
+     * [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/), or a URL to such JSON.
      * @param {Object} [options] Options object.
      * @param {boolean} [options.diff=true] If false, force a 'full' update, removing the current style
-     *   and building the given one instead of attempting a diff-based update.
+     * and building the given one instead of attempting a diff-based update.
+     * @param {boolean} [options.validate=true] If false, style validation will be skipped. Useful in production environment.
      * @param {string} [options.localIdeographFontFamily='sans-serif'] Defines a CSS
-     *   font-family for locally overriding generation of glyphs in the 'CJK Unified Ideographs', 'Hiragana', 'Katakana' and 'Hangul Syllables' ranges.
-     *   In these ranges, font settings from the map's style will be ignored, except for font-weight keywords (light/regular/medium/bold).
-     *   Set to `false`, to enable font settings from the map's style for these glyph ranges.
-     *   Forces a full update.
+     * font-family for locally overriding generation of glyphs in the 'CJK Unified Ideographs', 'Hiragana', 'Katakana' and 'Hangul Syllables' ranges.
+     * In these ranges, font settings from the map's style will be ignored, except for font-weight keywords (light/regular/medium/bold).
+     * Set to `false`, to enable font settings from the map's style for these glyph ranges.
+     * Forces a full update.
      * @param {TransformStyleFunction} [options.transformStyle=undefined] transformStyle is a convenience function
-     *   that allows to modify a style after it is fetched but before it is committed to the map state. Refer to {@link TransformStyleFunction}.
+     * that allows to modify a style after it is fetched but before it is committed to the map state. Refer to {@link TransformStyleFunction}.
      * @returns {Map} `this`
      *
      * @example
@@ -51700,7 +52941,10 @@ let Map$1 = class Map extends Camera {
      * });
      */
     setStyle(style, options) {
-        options = performance.extend({}, { localIdeographFontFamily: this._localIdeographFontFamily }, options);
+        options = performance.extend({}, {
+            localIdeographFontFamily: this._localIdeographFontFamily,
+            validate: this._validateStyle
+        }, options);
         if ((options.diff !== false && options.localIdeographFontFamily === this._localIdeographFontFamily) && this.style && style) {
             this._diffStyle(style, options);
             return this;
@@ -51714,7 +52958,7 @@ let Map$1 = class Map extends Camera {
      *  Updates the requestManager's transform request with a new function
      *
      * @param transformRequest A callback run before the Map makes a request for an external URL. The callback can be used to modify the url, set headers, or set the credentials property for cross-origin requests.
-     *    Expected to return an object with a `url` property and optionally `headers` and `credentials` properties
+     * Expected to return an object with a `url` property and optionally `headers` and `credentials` properties
      *
      * @returns {Map} `this`
      *
@@ -51827,7 +53071,7 @@ let Map$1 = class Map extends Camera {
      *
      * @param {string} id The ID of the source to add. Must not conflict with existing sources.
      * @param {Object} source The source object, conforming to the
-     * MapLibre Style Specification's [source definition](https://maplibre.org/maplibre-gl-js-docs/style-spec/#sources) or
+     * MapLibre Style Specification's [source definition](https://maplibre.org/maplibre-style-spec/#sources) or
      * {@link CanvasSourceOptions}.
      * @fires source.add
      * @returns {Map} `this`
@@ -51902,6 +53146,13 @@ let Map$1 = class Map extends Camera {
             const sourceCache = this.style.sourceCaches[options.source];
             if (!sourceCache)
                 throw new Error(`cannot load terrain, because there exists no source with ID: ${options.source}`);
+            // Warn once if user is using the same source for hillshade and terrain
+            for (const index in this.style._layers) {
+                const thisLayer = this.style._layers[index];
+                if (thisLayer.type === 'hillshade' && thisLayer.source === options.source) {
+                    performance.warnOnce('You are using the same source for a hillshade layer and for 3D terrain. Please consider using two separate sources to improve rendering quality.');
+                }
+            }
             this.terrain = new Terrain(this.painter, sourceCache, options);
             this.painter.renderToTexture = new RenderToTexture(this.painter, this.terrain);
             this.transform.updateElevation(this.terrain);
@@ -51987,7 +53238,7 @@ let Map$1 = class Map extends Camera {
      * corresponds to no existing sources.
      * The shape of the object varies by source type.
      * A list of options for each source type is available on the MapLibre Style Specification's
-     * [Sources](https://maplibre.org/maplibre-gl-js-docs/style-spec/sources/) page.
+     * [Sources](https://maplibre.org/maplibre-style-spec/sources/) page.
      * @example
      * var sourceObject = map.getSource('points');
      * @see [Create a draggable point](https://maplibre.org/maplibre-gl-js-docs/example/drag-a-point/)
@@ -52001,10 +53252,10 @@ let Map$1 = class Map extends Camera {
     /**
      * Add an image to the style. This image can be displayed on the map like any other icon in the style's
      * sprite using the image's ID with
-     * [`icon-image`](https://maplibre.org/maplibre-gl-js-docs/style-spec/#layout-symbol-icon-image),
-     * [`background-pattern`](https://maplibre.org/maplibre-gl-js-docs/style-spec/#paint-background-background-pattern),
-     * [`fill-pattern`](https://maplibre.org/maplibre-gl-js-docs/style-spec/#paint-fill-fill-pattern),
-     * or [`line-pattern`](https://maplibre.org/maplibre-gl-js-docs/style-spec/#paint-line-line-pattern).
+     * [`icon-image`](https://maplibre.org/maplibre-style-spec/#layout-symbol-icon-image),
+     * [`background-pattern`](https://maplibre.org/maplibre-style-spec/#paint-background-background-pattern),
+     * [`fill-pattern`](https://maplibre.org/maplibre-style-spec/#paint-fill-fill-pattern),
+     * or [`line-pattern`](https://maplibre.org/maplibre-style-spec/#paint-line-line-pattern).
      * A {@link Map.event:error} event will be fired if there is not enough space in the sprite to add this image.
      *
      * @param id The ID of the image.
@@ -52076,10 +53327,10 @@ let Map$1 = class Map extends Camera {
     /**
      * Update an existing image in a style. This image can be displayed on the map like any other icon in the style's
      * sprite using the image's ID with
-     * [`icon-image`](https://maplibre.org/maplibre-gl-js-docs/style-spec/#layout-symbol-icon-image),
-     * [`background-pattern`](https://maplibre.org/maplibre-gl-js-docs/style-spec/#paint-background-background-pattern),
-     * [`fill-pattern`](https://maplibre.org/maplibre-gl-js-docs/style-spec/#paint-fill-fill-pattern),
-     * or [`line-pattern`](https://maplibre.org/maplibre-gl-js-docs/style-spec/#paint-line-line-pattern).
+     * [`icon-image`](https://maplibre.org/maplibre-style-spec/#layout-symbol-icon-image),
+     * [`background-pattern`](https://maplibre.org/maplibre-style-spec/#paint-background-background-pattern),
+     * [`fill-pattern`](https://maplibre.org/maplibre-style-spec/#paint-fill-fill-pattern),
+     * or [`line-pattern`](https://maplibre.org/maplibre-style-spec/#paint-line-line-pattern).
      *
      * @param id The ID of the image.
      * @param image The image as an `HTMLImageElement`, `ImageData`, `ImageBitmap` or object with `width`, `height`, and `data`
@@ -52109,6 +53360,21 @@ let Map$1 = class Map extends Camera {
         const copy = !(image instanceof HTMLImageElement || performance.isImageBitmap(image));
         existingImage.data.replace(data, copy);
         this.style.updateImage(id, existingImage);
+    }
+    /**
+     * Returns an image, specified by ID, currently available in the map.
+     * This includes both images from the style's original sprite
+     * and any images that have been added at runtime using {@link Map#addImage}.
+     *
+     * @param id The ID of the image.
+     * @returns {StyleImage} An image in the map with the specified ID.
+     *
+     * @example
+     * var coffeeShopIcon = map.getImage("coffee_cup");
+     *
+     */
+    getImage(id) {
+        return this.style.getImage(id);
     }
     /**
      * Check whether or not an image with a specific ID exists in the style. This checks both images
@@ -52180,41 +53446,41 @@ let Map$1 = class Map extends Camera {
         return this.style.listImages();
     }
     /**
-     * Adds a [MapLibre style layer](https://maplibre.org/maplibre-gl-js-docs/style-spec/#layers)
+     * Adds a [MapLibre style layer](https://maplibre.org/maplibre-style-spec/#layers)
      * to the map's style.
      *
      * A layer defines how data from a specified source will be styled. Read more about layer types
-     * and available paint and layout properties in the [MapLibre Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/#layers).
+     * and available paint and layout properties in the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/#layers).
      *
      * TODO: JSDoc can't pass @param {(LayerSpecification & {source?: string | SourceSpecification}) | CustomLayerInterface} layer The layer to add,
      * @param {Object} layer
-     * conforming to either the MapLibre Style Specification's [layer definition](https://maplibre.org/maplibre-gl-js-docs/style-spec/#layers) or,
+     * conforming to either the MapLibre Style Specification's [layer definition](https://maplibre.org/maplibre-style-spec/#layers) or,
      * less commonly, the {@link CustomLayerInterface} specification.
      * The MapLibre Style Specification's layer definition is appropriate for most layers.
      *
-     * @param {string} layer.id A unique identifer that you define.
+     * @param {string} layer.id A unique identifier that you define.
      * @param {string} layer.type The type of layer (for example `fill` or `symbol`).
-     * A list of layer types is available in the [MapLibre Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/layers/#type).
+     * A list of layer types is available in the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/layers/#type).
      *
      * (This can also be `custom`. For more information, see {@link CustomLayerInterface}.)
      * @param {string | SourceSpecification} [layer.source] The data source for the layer.
      * Reference a source that has _already been defined_ using the source's unique id.
-     * Reference a _new source_ using a source object (as defined in the [MapLibre Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/sources/)) directly.
+     * Reference a _new source_ using a source object (as defined in the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/sources/)) directly.
      * This is **required** for all `layer.type` options _except_ for `custom` and `background`.
      * @param {string} [layer.sourceLayer] (optional) The name of the source layer within the specified `layer.source` to use for this style layer.
      * This is only applicable for vector tile sources and is **required** when `layer.source` is of the type `vector`.
      * @param {array} [layer.filter] (optional) An expression specifying conditions on source features.
      * Only features that match the filter are displayed.
-     * The MapLibre Style Specification includes more information on the limitations of the [`filter`](https://maplibre.org/maplibre-gl-js-docs/style-spec/layers/#filter) parameter
-     * and a complete list of available [expressions](https://maplibre.org/maplibre-gl-js-docs/style-spec/expressions/).
+     * The MapLibre Style Specification includes more information on the limitations of the [`filter`](https://maplibre.org/maplibre-style-spec/layers/#filter) parameter
+     * and a complete list of available [expressions](https://maplibre.org/maplibre-style-spec/expressions/).
      * If no filter is provided, all features in the source (or source layer for vector tilesets) will be displayed.
      * @param {Object} [layer.paint] (optional) Paint properties for the layer.
      * Available paint properties vary by `layer.type`.
-     * A full list of paint properties for each layer type is available in the [MapLibre Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/layers/).
+     * A full list of paint properties for each layer type is available in the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/layers/).
      * If no paint properties are specified, default values will be used.
      * @param {Object} [layer.layout] (optional) Layout properties for the layer.
      * Available layout properties vary by `layer.type`.
-     * A full list of layout properties for each layer type is available in the [MapLibre Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/layers/).
+     * A full list of layout properties for each layer type is available in the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/layers/).
      * If no layout properties are specified, default values will be used.
      * @param {number} [layer.maxzoom] (optional) The maximum zoom level for the layer.
      * At zoom levels equal to or greater than the maxzoom, the layer will be hidden.
@@ -52333,7 +53599,7 @@ let Map$1 = class Map extends Camera {
      *
      * @param {string} id The ID of the layer to get.
      * @returns {StyleLayer} The layer with the specified ID, or `undefined`
-     *   if the ID corresponds to no existing layers.
+     * if the ID corresponds to no existing layers.
      *
      * @example
      * var stateDataLayer = map.getLayer('state-data');
@@ -52346,8 +53612,8 @@ let Map$1 = class Map extends Camera {
     }
     /**
      * Sets the zoom extent for the specified style layer. The zoom extent includes the
-     * [minimum zoom level](https://maplibre.org/maplibre-gl-js-docs/style-spec/#layer-minzoom)
-     * and [maximum zoom level](https://maplibre.org/maplibre-gl-js-docs/style-spec/#layer-maxzoom))
+     * [minimum zoom level](https://maplibre.org/maplibre-style-spec/#layer-minzoom)
+     * and [maximum zoom level](https://maplibre.org/maplibre-style-spec/#layer-maxzoom))
      * at which the layer will be rendered.
      *
      * Note: For style layers using vector sources, style layers cannot be rendered at zoom levels lower than the
@@ -52381,7 +53647,7 @@ let Map$1 = class Map extends Camera {
      *
      * @param {string} layerId The ID of the layer to which the filter will be applied.
      * @param {Array | null | undefined} filter The filter, conforming to the MapLibre Style Specification's
-     *   [filter definition](https://maplibre.org/maplibre-gl-js-docs/style-spec/layers/#filter).  If `null` or `undefined` is provided, the function removes any existing filter from the layer.
+     * [filter definition](https://maplibre.org/maplibre-style-spec/layers/#filter).  If `null` or `undefined` is provided, the function removes any existing filter from the layer.
      * @param {Object} [options] Options object.
      * @param {boolean} [options.validate=true] Whether to check if the filter conforms to the MapLibre GL Style Specification. Disabling validation is a performance optimization that should only be used if you have previously validated the values you will be passing to this function.
      * @returns {Map} `this`
@@ -52417,7 +53683,7 @@ let Map$1 = class Map extends Camera {
      * @param {string} layerId The ID of the layer to set the paint property in.
      * @param {string} name The name of the paint property to set.
      * @param {*} value The value of the paint property to set.
-     *   Must be of a type appropriate for the property, as defined in the [MapLibre Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/).
+     * Must be of a type appropriate for the property, as defined in the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/).
      * @param {Object} [options] Options object.
      * @param {boolean} [options.validate=true] Whether to check if `value` conforms to the MapLibre GL Style Specification. Disabling validation is a performance optimization that should only be used if you have previously validated the values you will be passing to this function.
      * @returns {Map} `this`
@@ -52445,7 +53711,7 @@ let Map$1 = class Map extends Camera {
      *
      * @param {string} layerId The ID of the layer to set the layout property in.
      * @param {string} name The name of the layout property to set.
-     * @param {*} value The value of the layout property. Must be of a type appropriate for the property, as defined in the [MapLibre Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/).
+     * @param {*} value The value of the layout property. Must be of a type appropriate for the property, as defined in the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/).
      * @param {Object} [options] Options object.
      * @param {boolean} [options.validate=true] Whether to check if `value` conforms to the MapLibre GL Style Specification. Disabling validation is a performance optimization that should only be used if you have previously validated the values you will be passing to this function.
      * @returns {Map} `this`
@@ -52469,7 +53735,7 @@ let Map$1 = class Map extends Camera {
     /**
      * Sets the value of the style's glyphs property.
      *
-     * @param glyphsUrl Glyph URL to set. Must conform to the [MapLibre Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/glyphs/).
+     * @param glyphsUrl Glyph URL to set. Must conform to the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/glyphs/).
      * @param {StyleSetterOptions} [options] Options object.
      * @param {boolean} [options.validate=true] Whether to check if the filter conforms to the MapLibre GL Style Specification. Disabling validation is a performance optimization that should only be used if you have previously validated the values you will be passing to this function.
      * @returns {Map} `this`
@@ -52555,7 +53821,7 @@ let Map$1 = class Map extends Camera {
     /**
      * Sets the any combination of light values.
      *
-     * @param light Light properties to set. Must conform to the [MapLibre Style Specification](https://maplibre.org/maplibre-gl-js-docs/style-spec/#light).
+     * @param light Light properties to set. Must conform to the [MapLibre Style Specification](https://maplibre.org/maplibre-style-spec/#light).
      * @param {Object} [options] Options object.
      * @param {boolean} [options.validate=true] Whether to check if the filter conforms to the MapLibre GL Style Specification. Disabling validation is a performance optimization that should only be used if you have previously validated the values you will be passing to this function.
      * @returns {Map} `this`
@@ -52584,10 +53850,10 @@ let Map$1 = class Map extends Camera {
      *
      * This method can only be used with sources that have a `feature.id` attribute. The `feature.id` attribute can be defined in three ways:
      * - For vector or GeoJSON sources, including an `id` attribute in the original data file.
-     * - For vector or GeoJSON sources, using the [`promoteId`](https://maplibre.org/maplibre-gl-js-docs/style-spec/sources/#vector-promoteId) option at the time the source is defined.
-     * - For GeoJSON sources, using the [`generateId`](https://maplibre.org/maplibre-gl-js-docs/style-spec/sources/#geojson-generateId) option to auto-assign an `id` based on the feature's index in the source data. If you change feature data using `map.getSource('some id').setData(..)`, you may need to re-apply state taking into account updated `id` values.
+     * - For vector or GeoJSON sources, using the [`promoteId`](https://maplibre.org/maplibre-style-spec/sources/#vector-promoteId) option at the time the source is defined.
+     * - For GeoJSON sources, using the [`generateId`](https://maplibre.org/maplibre-style-spec/sources/#geojson-generateId) option to auto-assign an `id` based on the feature's index in the source data. If you change feature data using `map.getSource('some id').setData(..)`, you may need to re-apply state taking into account updated `id` values.
      *
-     * _Note: You can use the [`feature-state` expression](https://maplibre.org/maplibre-gl-js-docs/style-spec/expressions/#feature-state) to access the values in a feature's state object for the purposes of styling._
+     * _Note: You can use the [`feature-state` expression](https://maplibre.org/maplibre-style-spec/expressions/#feature-state) to access the values in a feature's state object for the purposes of styling._
      *
      * @param {Object} feature Feature identifier. Feature objects returned from
      * {@link Map#queryRenderedFeatures} or event handlers can be used as feature identifiers.
@@ -52673,7 +53939,7 @@ let Map$1 = class Map extends Camera {
      * A feature's `state` is a set of user-defined key-value pairs that are assigned to a feature at runtime.
      * Features are identified by their `feature.id` attribute, which can be any number or string.
      *
-     * _Note: To access the values in a feature's state object for the purposes of styling the feature, use the [`feature-state` expression](https://maplibre.org/maplibre-gl-js-docs/style-spec/expressions/#feature-state)._
+     * _Note: To access the values in a feature's state object for the purposes of styling the feature, use the [`feature-state` expression](https://maplibre.org/maplibre-style-spec/expressions/#feature-state)._
      *
      * @param {Object} feature Feature identifier. Feature objects returned from
      * {@link Map#queryRenderedFeatures} or event handlers can be used as feature identifiers.
@@ -52765,35 +54031,30 @@ let Map$1 = class Map extends Camera {
         });
         this._container.addEventListener('scroll', this._onMapScroll, false);
     }
+    _cooperativeGesturesOnWheel(event) {
+        this._onCooperativeGesture(event, event[this._metaKey], 1);
+    }
     _setupCooperativeGestures() {
         const container = this._container;
-        this._metaPress = false;
         this._cooperativeGesturesScreen = DOM.create('div', 'maplibregl-cooperative-gesture-screen', container);
-        let modifierKeyName = 'Control';
         let desktopMessage = typeof this._cooperativeGestures !== 'boolean' && this._cooperativeGestures.windowsHelpText ? this._cooperativeGestures.windowsHelpText : 'Use Ctrl + scroll to zoom the map';
         if (navigator.platform.indexOf('Mac') === 0) {
             desktopMessage = typeof this._cooperativeGestures !== 'boolean' && this._cooperativeGestures.macHelpText ? this._cooperativeGestures.macHelpText : 'Use ⌘ + scroll to zoom the map';
-            modifierKeyName = 'Meta';
         }
         const mobileMessage = typeof this._cooperativeGestures !== 'boolean' && this._cooperativeGestures.mobileHelpText ? this._cooperativeGestures.mobileHelpText : 'Use two fingers to move the map';
         this._cooperativeGesturesScreen.innerHTML = `
             <div class="maplibregl-desktop-message">${desktopMessage}</div>
             <div class="maplibregl-mobile-message">${mobileMessage}</div>
         `;
-        document.addEventListener('keydown', (event) => {
-            if (event.key === modifierKeyName)
-                this._metaPress = true;
-        });
-        document.addEventListener('keyup', (event) => {
-            if (event.key === modifierKeyName)
-                this._metaPress = false;
-        });
         // Add event to canvas container since gesture container is pointer-events: none
-        this._canvasContainer.addEventListener('wheel', (e) => {
-            this._onCooperativeGesture(e, this._metaPress, 1);
-        }, false);
-        // Remove the traditional pan classes
-        this._canvasContainer.classList.remove('maplibregl-touch-drag-pan');
+        this._canvasContainer.addEventListener('wheel', this._cooperativeGesturesOnWheel, false);
+        // Add a cooperative gestures class (enable touch-action: pan-x pan-y;)
+        this._canvasContainer.classList.add('maplibregl-cooperative-gestures');
+    }
+    _destroyCooperativeGestures() {
+        DOM.remove(this._cooperativeGesturesScreen);
+        this._canvasContainer.removeEventListener('wheel', this._cooperativeGesturesOnWheel, false);
+        this._canvasContainer.classList.remove('maplibregl-cooperative-gestures');
     }
     _resizeCanvas(width, height, pixelRatio) {
         // Request the required canvas size taking the pixelratio into account.
@@ -52965,7 +54226,14 @@ let Map$1 = class Map extends Camera {
         if (this.terrain)
             this.terrain.sourceCache.update(this.transform, this.terrain);
         this.transform.updateElevation(this.terrain);
-        this._imageQueueDirty = ImageRequest$1.processQueue() > 0;
+        // a bit of counter intuitive:
+        // - when map is moving (throttled) image queue does not auto advance so need manually process it for each render
+        // or it may miss raster tiles.
+        // - when not moving (initial load or changing styles), image queue is self-driven to finish. manual process
+        // is not doing anything but wasting time.
+        if (this.isMoving()) {
+            ImageRequest$1.processQueue();
+        }
         this._placementDirty = this.style && this.style._updatePlacement(this.painter.transform, this.showCollisionBoxes, this._fadeDuration, this._crossSourceCollisions);
         // Actually draw
         this.painter.render(this.style, {
@@ -53021,7 +54289,7 @@ let Map$1 = class Map extends Camera {
         // Even though `_styleDirty` and `_sourcesDirty` are reset in this
         // method, synchronous events fired during Style#update or
         // Style#_updateSources could have caused them to be set again.
-        const somethingDirty = this._sourcesDirty || this._styleDirty || this._placementDirty || this._imageQueueDirty;
+        const somethingDirty = this._sourcesDirty || this._styleDirty || this._placementDirty;
         if (somethingDirty || this._repaint) {
             this.triggerRepaint();
         }
@@ -53061,6 +54329,7 @@ let Map$1 = class Map extends Camera {
      * methods on the map.
      */
     remove() {
+        var _a;
         if (this._hash)
             this._hash.remove();
         for (const control of this._controls)
@@ -53076,11 +54345,10 @@ let Map$1 = class Map extends Camera {
         delete this.handlers;
         this.setStyle(null);
         if (typeof window !== 'undefined') {
-            removeEventListener('resize', this._onWindowResize, false);
-            removeEventListener('orientationchange', this._onWindowResize, false);
             removeEventListener('online', this._onWindowOnline, false);
         }
         ImageRequest$1.removeThrottleControl(this._imageQueueHandle);
+        (_a = this._resizeObserver) === null || _a === void 0 ? void 0 : _a.disconnect();
         const extension = this.painter.context.gl.getExtension('WEBGL_lose_context');
         if (extension)
             extension.loseContext();
@@ -53089,7 +54357,7 @@ let Map$1 = class Map extends Camera {
         DOM.remove(this._canvasContainer);
         DOM.remove(this._controlContainer);
         if (this._cooperativeGestures) {
-            DOM.remove(this._cooperativeGesturesScreen);
+            this._destroyCooperativeGestures();
         }
         this._container.classList.remove('maplibregl-map');
         performance.PerformanceUtils.clearMetrics();
@@ -53116,11 +54384,6 @@ let Map$1 = class Map extends Camera {
     }
     _onWindowOnline() {
         this._update();
-    }
-    _onWindowResize(event) {
-        if (this._trackResize) {
-            this.resize({ originalEvent: event })._update();
-        }
     }
     /**
      * Gets and sets a Boolean indicating whether the map will render an outline
@@ -53505,6 +54768,31 @@ class MouseRotateWrapper {
     }
 }
 
+let supportsGeolocation;
+function checkGeolocationSupport(callback, forceRecalculation = false) {
+    if (supportsGeolocation !== undefined && !forceRecalculation) {
+        callback(supportsGeolocation);
+    }
+    else if (window.navigator.permissions !== undefined) {
+        // navigator.permissions has incomplete browser support
+        // http://caniuse.com/#feat=permissions-api
+        // Test for the case where a browser disables Geolocation because of an
+        // insecure origin
+        window.navigator.permissions.query({ name: 'geolocation' }).then((p) => {
+            supportsGeolocation = p.state !== 'denied';
+            callback(supportsGeolocation);
+        }).catch(() => {
+            // Fix for iOS16 which rejects query but still supports geolocation
+            supportsGeolocation = !!window.navigator.geolocation;
+            callback(supportsGeolocation);
+        });
+    }
+    else {
+        supportsGeolocation = !!window.navigator.geolocation;
+        callback(supportsGeolocation);
+    }
+}
+
 /**
  * Given a LngLat, prior projected position, and a transform, return a new LngLat shifted
  * n × 360° east or west for some n ≥ 0 such that:
@@ -53577,7 +54865,7 @@ function applyAnchorClass(element, anchor, prefix) {
  * @param {Object} [options]
  * @param {HTMLElement} [options.element] DOM element to use as a marker. The default is a light blue, droplet-shaped SVG marker.
  * @param {string} [options.anchor='center'] A string indicating the part of the Marker that should be positioned closest to the coordinate set via {@link Marker#setLngLat}.
- *   Options are `'center'`, `'top'`, `'bottom'`, `'left'`, `'right'`, `'top-left'`, `'top-right'`, `'bottom-left'`, and `'bottom-right'`.
+ * Options are `'center'`, `'top'`, `'bottom'`, `'left'`, `'right'`, `'top-left'`, `'top-right'`, `'bottom-left'`, and `'bottom-right'`.
  * @param {PointLike} [options.offset] The offset in pixels as a {@link PointLike} object to apply relative to the element's center. Negatives indicate left and up.
  * @param {string} [options.color='#3FB1CE'] The color to use for the default marker if options.element is not provided. The default is light blue.
  * @param {number} [options.scale=1] The scale to use for the default marker if options.element is not provided. The default scale corresponds to a height of `41px` and a width of `27px`.
@@ -53712,11 +55000,11 @@ class Marker extends performance.Evented {
             // the y value of the center of the shadow ellipse relative to the svg top left is "shadow transform translate-y (29.0) + ellipse cy (5.80029008)"
             // offset to the svg center "height (41 / 2)" gives (29.0 + 5.80029008) - (41 / 2) and rounded for an integer pixel offset gives 14
             // negative is used to move the marker up from the center so the tip is at the Marker lngLat
-            this._offset = performance.pointGeometry.convert(options && options.offset || [0, -14]);
+            this._offset = performance.Point.convert(options && options.offset || [0, -14]);
         }
         else {
             this._element = options.element;
-            this._offset = performance.pointGeometry.convert(options && options.offset || [0, 0]);
+            this._offset = performance.Point.convert(options && options.offset || [0, 0]);
         }
         this._element.classList.add('maplibregl-marker');
         this._element.addEventListener('dragstart', (e) => {
@@ -53747,7 +55035,7 @@ class Marker extends performance.Evented {
         this.setDraggable(this._draggable);
         this._update();
         // If we attached the `click` listener to the marker element, the popup
-        // would close once the event propogated to `map` due to the
+        // would close once the event propagated to `map` due to the
         // `Popup#_onClickClose` listener.
         this._map.on('click', this._onMapClick);
         return this;
@@ -53976,7 +55264,7 @@ class Marker extends performance.Evented {
      * @returns {Marker} `this`
      */
     setOffset(offset) {
-        this._offset = performance.pointGeometry.convert(offset);
+        this._offset = performance.Point.convert(offset);
         this._update();
         return this;
     }
@@ -54154,26 +55442,6 @@ const defaultOptions$2 = {
     showAccuracyCircle: true,
     showUserLocation: true
 };
-let supportsGeolocation;
-function checkGeolocationSupport(callback) {
-    if (supportsGeolocation !== undefined) {
-        callback(supportsGeolocation);
-    }
-    else if (window.navigator.permissions !== undefined) {
-        // navigator.permissions has incomplete browser support
-        // http://caniuse.com/#feat=permissions-api
-        // Test for the case where a browser disables Geolocation because of an
-        // insecure origin
-        window.navigator.permissions.query({ name: 'geolocation' }).then((p) => {
-            supportsGeolocation = p.state !== 'denied';
-            callback(supportsGeolocation);
-        });
-    }
-    else {
-        supportsGeolocation = !!window.navigator.geolocation;
-        callback(supportsGeolocation);
-    }
-}
 let numberOfWatches = 0;
 let noTimeout = false;
 /**
@@ -54362,7 +55630,8 @@ class GeolocateControl extends performance.Evented {
         const radius = position.coords.accuracy;
         const bearing = this._map.getBearing();
         const options = performance.extend({ bearing }, this.options.fitBoundsOptions);
-        this._map.fitBounds(center.toBounds(radius), options, {
+        const newBounds = LngLatBounds.fromLngLat(center, radius);
+        this._map.fitBounds(newBounds, options, {
             geolocateSource: true // tag this camera change so it won't cause the control to change to background state
         });
     }
@@ -54447,6 +55716,11 @@ class GeolocateControl extends performance.Evented {
         this._timeoutId = undefined;
     }
     _setupUI(supported) {
+        // this method is called asynchronously during onAdd
+        // the control could have been removed before reaching here
+        if (!this._map) {
+            return;
+        }
         this._container.addEventListener('contextmenu', (e) => e.preventDefault());
         this._geolocateButton = DOM.create('button', 'maplibregl-ctrl-geolocate', this._container);
         DOM.create('span', 'maplibregl-ctrl-icon', this._geolocateButton).setAttribute('aria-hidden', 'true');
@@ -54853,6 +56127,8 @@ function getRoundNum(num) {
 /**
  * A `FullscreenControl` control contains a button for toggling the map in and out of fullscreen mode.
  * When [requestFullscreen](https://developer.mozilla.org/en-US/docs/Web/API/Element/requestFullscreen) is not supported, fullscreen is handled via CSS properties.
+ * The map's `cooperativeGestures` option is temporarily disabled while the map
+ * is in fullscreen mode, and is restored when the map exist fullscreen mode.
  *
  * @implements {IControl}
  * @param {Object} [options]
@@ -54957,9 +56233,17 @@ class FullscreenControl extends performance.Evented {
         this._updateTitle();
         if (this._fullscreen) {
             this.fire(new performance.Event('fullscreenstart'));
+            if (this._map._cooperativeGestures) {
+                this._prevCooperativeGestures = this._map._cooperativeGestures;
+                this._map.setCooperativeGestures();
+            }
         }
         else {
             this.fire(new performance.Event('fullscreenend'));
+            if (this._prevCooperativeGestures) {
+                this._map.setCooperativeGestures(this._prevCooperativeGestures);
+                delete this._prevCooperativeGestures;
+            }
         }
     }
     _exitFullscreen() {
@@ -55085,30 +56369,30 @@ const focusQuerySelector = [
  *
  * @param {Object} [options]
  * @param {boolean} [options.closeButton=true] If `true`, a close button will appear in the
- *   top right corner of the popup.
+ * top right corner of the popup.
  * @param {boolean} [options.closeOnClick=true] If `true`, the popup will closed when the
- *   map is clicked.
+ * map is clicked.
  * @param {boolean} [options.closeOnMove=false] If `true`, the popup will closed when the
- *   map moves.
+ * map moves.
  * @param {boolean} [options.focusAfterOpen=true] If `true`, the popup will try to focus the
- *   first focusable element inside the popup.
+ * first focusable element inside the popup.
  * @param {string} [options.anchor] - A string indicating the part of the Popup that should
- *   be positioned closest to the coordinate set via {@link Popup#setLngLat}.
- *   Options are `'center'`, `'top'`, `'bottom'`, `'left'`, `'right'`, `'top-left'`,
- *   `'top-right'`, `'bottom-left'`, and `'bottom-right'`. If unset the anchor will be
- *   dynamically set to ensure the popup falls within the map container with a preference
- *   for `'bottom'`.
+ * be positioned closest to the coordinate set via {@link Popup#setLngLat}.
+ * Options are `'center'`, `'top'`, `'bottom'`, `'left'`, `'right'`, `'top-left'`,
+ * `'top-right'`, `'bottom-left'`, and `'bottom-right'`. If unset the anchor will be
+ * dynamically set to ensure the popup falls within the map container with a preference
+ * for `'bottom'`.
  * @param {number|PointLike|Object} [options.offset] -
- *  A pixel offset applied to the popup's location specified as:
- *   - a single number specifying a distance from the popup's location
- *   - a {@link PointLike} specifying a constant offset
- *   - an object of {@link Point}s specifing an offset for each anchor position
- *  Negative offsets indicate left and up.
+ * A pixel offset applied to the popup's location specified as:
+ * - a single number specifying a distance from the popup's location
+ * - a {@link PointLike} specifying a constant offset
+ * - an object of {@link Point}s specifying an offset for each anchor position
+ * Negative offsets indicate left and up.
  * @param {string} [options.className] Space-separated CSS class names to add to popup container
  * @param {string} [options.maxWidth='240px'] -
- *  A string that sets the CSS property of the popup's maximum width, eg `'300px'`.
- *  To ensure the popup resizes to fit its content, set this property to `'none'`.
- *  Available values can be found here: https://developer.mozilla.org/en-US/docs/Web/CSS/max-width
+ * A string that sets the CSS property of the popup's maximum width, eg `'300px'`.
+ * To ensure the popup resizes to fit its content, set this property to `'none'`.
+ * Available values can be found here: https://developer.mozilla.org/en-US/docs/Web/CSS/max-width
  * @example
  * var markerHeight = 50, markerRadius = 10, linearOffset = 25;
  * var popupOffsets = {
@@ -55177,7 +56461,7 @@ class Popup extends performance.Evented {
             this._map.on('move', this._update);
         }
         /**
-         * Fired when the popup is opened manually or programatically.
+         * Fired when the popup is opened manually or programmatically.
          *
          * @event open
          * @memberof Popup
@@ -55231,7 +56515,7 @@ class Popup extends performance.Evented {
             delete this._map;
         }
         /**
-         * Fired when the popup is closed manually or programatically.
+         * Fired when the popup is closed manually or programmatically.
          *
          * @event close
          * @memberof Popup
@@ -55571,26 +56855,26 @@ class Popup extends performance.Evented {
 }
 function normalizeOffset(offset) {
     if (!offset) {
-        return normalizeOffset(new performance.pointGeometry(0, 0));
+        return normalizeOffset(new performance.Point(0, 0));
     }
     else if (typeof offset === 'number') {
         // input specifies a radius from which to calculate offsets at all positions
         const cornerOffset = Math.round(Math.sqrt(0.5 * Math.pow(offset, 2)));
         return {
-            'center': new performance.pointGeometry(0, 0),
-            'top': new performance.pointGeometry(0, offset),
-            'top-left': new performance.pointGeometry(cornerOffset, cornerOffset),
-            'top-right': new performance.pointGeometry(-cornerOffset, cornerOffset),
-            'bottom': new performance.pointGeometry(0, -offset),
-            'bottom-left': new performance.pointGeometry(cornerOffset, -cornerOffset),
-            'bottom-right': new performance.pointGeometry(-cornerOffset, -cornerOffset),
-            'left': new performance.pointGeometry(offset, 0),
-            'right': new performance.pointGeometry(-offset, 0)
+            'center': new performance.Point(0, 0),
+            'top': new performance.Point(0, offset),
+            'top-left': new performance.Point(cornerOffset, cornerOffset),
+            'top-right': new performance.Point(-cornerOffset, cornerOffset),
+            'bottom': new performance.Point(0, -offset),
+            'bottom-left': new performance.Point(cornerOffset, -cornerOffset),
+            'bottom-right': new performance.Point(-cornerOffset, -cornerOffset),
+            'left': new performance.Point(offset, 0),
+            'right': new performance.Point(-offset, 0)
         };
     }
-    else if (offset instanceof performance.pointGeometry || Array.isArray(offset)) {
+    else if (offset instanceof performance.Point || Array.isArray(offset)) {
         // input specifies a single offset to be applied to all positions
-        const convertedOffset = performance.pointGeometry.convert(offset);
+        const convertedOffset = performance.Point.convert(offset);
         return {
             'center': convertedOffset,
             'top': convertedOffset,
@@ -55606,15 +56890,15 @@ function normalizeOffset(offset) {
     else {
         // input specifies an offset per position
         return {
-            'center': performance.pointGeometry.convert(offset['center'] || [0, 0]),
-            'top': performance.pointGeometry.convert(offset['top'] || [0, 0]),
-            'top-left': performance.pointGeometry.convert(offset['top-left'] || [0, 0]),
-            'top-right': performance.pointGeometry.convert(offset['top-right'] || [0, 0]),
-            'bottom': performance.pointGeometry.convert(offset['bottom'] || [0, 0]),
-            'bottom-left': performance.pointGeometry.convert(offset['bottom-left'] || [0, 0]),
-            'bottom-right': performance.pointGeometry.convert(offset['bottom-right'] || [0, 0]),
-            'left': performance.pointGeometry.convert(offset['left'] || [0, 0]),
-            'right': performance.pointGeometry.convert(offset['right'] || [0, 0])
+            'center': performance.Point.convert(offset['center'] || [0, 0]),
+            'top': performance.Point.convert(offset['top'] || [0, 0]),
+            'top-left': performance.Point.convert(offset['top-left'] || [0, 0]),
+            'top-right': performance.Point.convert(offset['top-right'] || [0, 0]),
+            'bottom': performance.Point.convert(offset['bottom'] || [0, 0]),
+            'bottom-left': performance.Point.convert(offset['bottom-left'] || [0, 0]),
+            'bottom-right': performance.Point.convert(offset['bottom-right'] || [0, 0]),
+            'left': performance.Point.convert(offset['left'] || [0, 0]),
+            'right': performance.Point.convert(offset['right'] || [0, 0])
         };
     }
 }
@@ -55636,8 +56920,8 @@ const exported = {
     Marker,
     Style,
     LngLat: performance.LngLat,
-    LngLatBounds: performance.LngLatBounds,
-    Point: performance.pointGeometry,
+    LngLatBounds,
+    Point: performance.Point,
     MercatorCoordinate: performance.MercatorCoordinate,
     Evented: performance.Evented,
     AJAXError: performance.AJAXError,
@@ -55720,7 +57004,12 @@ const exported = {
     set maxParallelImageRequests(numRequests) {
         performance.config.MAX_PARALLEL_IMAGE_REQUESTS = numRequests;
     },
-    workerUrl: '',
+    get workerUrl() {
+        return performance.config.WORKER_URL;
+    },
+    set workerUrl(value) {
+        performance.config.WORKER_URL = value;
+    },
     /**
      * Sets a custom load tile function that will be called when using a source that starts with a custom url schema.
      * The example below will be triggered for custom:// urls defined in the sources list in the style definitions.
@@ -55731,8 +57020,8 @@ const exported = {
      * @param {string} customProtocol - the protocol to hook, for example 'custom'
      * @param {Function} loadFn - the function to use when trying to fetch a tile specified by the customProtocol
      * @example
-     * // this will fetch a file using the fetch API (this is obviously a non iteresting example...)
-     * maplibre.addProtocol('custom', (params, callback) => {
+     * // this will fetch a file using the fetch API (this is obviously a non interesting example...)
+     * maplibregl.addProtocol('custom', (params, callback) => {
             fetch(`https://${params.url.split("://")[1]}`)
                 .then(t => {
                     if (t.status == 200) {
@@ -55749,7 +57038,7 @@ const exported = {
             return { cancel: () => { } };
         });
      * // the following is an example of a way to return an error when trying to load a tile
-     * maplibre.addProtocol('custom2', (params, callback) => {
+     * maplibregl.addProtocol('custom2', (params, callback) => {
      *      callback(new Error('someErrorMessage'));
      *      return { cancel: () => { } };
      * });
@@ -55758,7 +57047,7 @@ const exported = {
         performance.config.REGISTERED_PROTOCOLS[customProtocol] = loadFn;
     },
     /**
-     * Removes a previusly added protocol
+     * Removes a previously added protocol
      *
      * @function removeProtocol
      * @param {string} customProtocol - the custom protocol to remove registration for
@@ -55771,47 +57060,8 @@ const exported = {
 };
 //This gets automatically stripped out in production builds.
 Debug.extend(exported, { isSafari: performance.isSafari, getPerformanceMetrics: performance.PerformanceUtils.getPerformanceMetrics });
-/**
- * Test whether the browser supports MapLibre GL JS.
- *
- * @function supported
- * @param {Object} [options]
- * @param {boolean} [options.failIfMajorPerformanceCaveat=false] If `true`,
- *   the function will return `false` if the performance of MapLibre GL JS would
- *   be dramatically worse than expected (e.g. a software WebGL renderer would be used).
- * @return {boolean}
- * @example
- * // Show an alert if the browser does not support MapLibre GL
- * if (!maplibregl.supported()) {
- *   alert('Your browser does not support MapLibre GL');
- * }
- * @see [Check for browser support](https://maplibre.org/maplibre-gl-js-docs/example/check-for-support/)
- */
-/**
- * Sets the map's [RTL text plugin](https://www.mapbox.com/mapbox-gl-js/plugins/#mapbox-gl-rtl-text).
- * Necessary for supporting the Arabic and Hebrew languages, which are written right-to-left.
- *
- * @function setRTLTextPlugin
- * @param {string} pluginURL URL pointing to the Mapbox RTL text plugin source.
- * @param {Function} callback Called with an error argument if there is an error.
- * @param {boolean} lazy If set to `true`, mapboxgl will defer loading the plugin until rtl text is encountered,
- *    rtl text will then be rendered only after the plugin finishes loading.
- * @example
- * maplibregl.setRTLTextPlugin('https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js');
- * @see [Add support for right-to-left scripts](https://maplibre.org/maplibre-gl-js-docs/example/mapbox-gl-rtl-text/)
- */
-/**
- * Gets the map's [RTL text plugin](https://www.mapbox.com/mapbox-gl-js/plugins/#mapbox-gl-rtl-text) status.
- * The status can be `unavailable` (i.e. not requested or removed), `loading`, `loaded` or `error`.
- * If the status is `loaded` and the plugin is requested again, an error will be thrown.
- *
- * @function getRTLTextPluginStatus
- * @example
- * const pluginStatus = maplibregl.getRTLTextPluginStatus();
- */
-var maplibregl = exported;
 
-return maplibregl;
+return exported;
 
 }));
 
