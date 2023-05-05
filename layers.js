@@ -52,7 +52,7 @@ function addSatelliteButton() {
 }
 
 function addLayerHelper(id, type, data) {
-	addLayerButton({"id": id, "type": type, "source": {"type": "geojson", "data": data}});
+	addLayerButton({"id": id, "type": type, "source": {"type": "geojson", "data": data}, "active": true});
 }
 
 function checkAddGeoJsonLayer() {
@@ -81,7 +81,7 @@ function addLayerButton(layer) {
 
 	button.setAttribute('id', id);
 	button.setAttribute('class', 'maplibregl-ctrl maplibregl-ctrl-group');
-	if(layer['active'] === undefined || layer['active'] === true) {
+	if(layer['active'] !== undefined && layer['active'] === true) {
 		classList.add('active');
 		addLayer(layer);
 	}
