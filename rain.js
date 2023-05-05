@@ -5,7 +5,7 @@ const TILE_SIZE = 2048;
 //also found here     :  curl https://mapservices.weather.noaa.gov/raster/rest/services/obs/rfc_qpe/MapServer/?f=json |jq .
 
 //const RAIN_PATH = 'https://nowcoast.noaa.gov/arcgis/rest/services/nowcoast/analysis_meteohydro_sfc_qpe_time/MapServer/export'; const LAYER_ID_MAP =  {'1d': 19, '3d': 27};
-const RAIN_PATH = 'https://mapservices.weather.noaa.gov/raster/rest/services/obs/rfc_qpe/MapServer/export'; const LAYER_ID_MAP =  {'1d': 25+3, '3d': 37+3, '7d': 53+3};
+const RAIN_PATH = 'https://mapservices.weather.noaa.gov/raster/rest/services/obs/rfc_qpe/MapServer/export'; const LAYER_ID_MAP =  {'1d': 25+3, '3d': 37+3, '5d': 45+3};
 
 //5 day and 7 day can be found here:  https://www.wpc.ncep.noaa.gov/qpf/p120i.gif  https://www.wpc.ncep.noaa.gov/qpf/p168i.gif
 
