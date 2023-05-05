@@ -13,7 +13,8 @@
 	<script src='rain.js'></script>
 	<script src='route.js'></script>
 	<script src='save.js'></script>
-	<script src='layers.js'></script>
+	<script src='directory.js'></script>
+	<script src='layer.js'></script>
 	
 	<link rel='stylesheet' href='pelias-geocoder.css' type='text/css'/>
 	<link rel="icon" href="sprite/bikeicon.png">
@@ -200,6 +201,8 @@ var query = new URLSearchParams(window.location.search);
 var cookieOptions = { expires: 182 };
 
 var map = setupMap();
+
+var globalLayers = []; //used by clear button
 
 var savePointUrl;
 

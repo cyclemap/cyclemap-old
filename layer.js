@@ -33,8 +33,13 @@ function setupLayers() {
 		var layerButtons = layerPicker.getElementsByTagName('button');
 		Array.prototype.forEach.call(layerButtons, (input) => {
 			var id = input.id;
-			input.classList.remove('active');
-			removeLayer(id);
+			for(layer of globalLayers) {
+				if(layer['id'] === id) {
+					removeLayer(layer);
+					input.classList.remove('active');
+					break;
+				}
+			}
 		});
 	};
 }
@@ -69,6 +74,12 @@ function addLayerButtons(layers) {
 	}
 }
 
+function addToGlobalLayers(layer) {
+	if(!globalLayers.some(check => check['id'] === layer['id'])) {
+		globalLayers.push(layer);
+	}
+}
+
 function addLayerButton(layer) {
 	var layerPicker = document.getElementById('layerPicker');
 	var button = document.createElement('button');
@@ -78,6 +89,8 @@ function addLayerButton(layer) {
 	if(document.getElementById(id) != null) {
 		return;
 	}
+	
+	addToGlobalLayers(layer);
 
 	button.setAttribute('id', id);
 	button.setAttribute('class', 'maplibregl-ctrl maplibregl-ctrl-group');
@@ -95,7 +108,7 @@ function addLayerButton(layer) {
 		}
 		else {
 			classList.remove('active');
-			removeLayer(layer['id']);
+			removeLayer(layer);
 		}
 	};
 	layerPicker.appendChild(button);
@@ -105,6 +118,10 @@ function addLayerButton(layer) {
 
 function addLayer(layer) {
 	var id = layer['id'];
+	if(layer['type'] === 'directory') {
+		addDirectory(layer);
+		return;
+	}
 	if(layer['beforeId'] != null && map.getLayer(layer['beforeId']) == null) {
 		layer['beforeId'] = null;
 	}
@@ -139,8 +156,15 @@ function addLayer(layer) {
 	}
 }
 
-function removeLayerButton(id) {
-	removeLayer(id);
+function removeLayerButtons(layers) {
+	for(var layer of layers) {
+		removeLayerButton(layer);
+	}
+}
+
+function removeLayerButton(layer) {
+	removeLayer(layer);
+	var id = layer['id'];
 	if(map.getSource(id) != null) {
 		map.removeSource(id);
 	}
@@ -149,7 +173,12 @@ function removeLayerButton(id) {
 	}
 }
 
-function removeLayer(id) {
+function removeLayer(layer) {
+	if(layer['type'] === 'directory') {
+		removeDirectory(layer);
+		return;
+	}
+	var id = layer['id'];
 	if(map.getLayer(id) == null) {
 		return;
 	}
