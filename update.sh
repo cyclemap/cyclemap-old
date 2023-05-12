@@ -6,12 +6,12 @@ set -e #exit on failure
 maplibreVersion=3.0.0-pre.5
 jsCookieVersion=3.0.1
 geocoderVersion=master
-vectorTextProtocol=master
+vectorTextProtocolVersion=master
 
 
 maplibreUrl=https://github.com/maplibre/maplibre-gl-js/releases/download/v$maplibreVersion/dist.zip
 geocoderUrl=https://github.com/Joxit/pelias-mapbox-gl-js/archive/refs/heads/$geocoderVersion.zip
-vectorTextProtocol=https://github.com/jimmyrocks/maplibre-gl-vector-text-protocol/archive/refs/heads/$vectorTextProtocol.zip
+vectorTextProtocol=https://github.com/jimmyrocks/maplibre-gl-vector-text-protocol/archive/refs/heads/$vectorTextProtocolVersion.zip
 base='https://tileserver.cyclemap.us/styles/maptiler-cyclemap'
 
 curl --output style.json "$base/style.json"
