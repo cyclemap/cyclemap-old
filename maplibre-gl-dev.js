@@ -1,4 +1,4 @@
-/* MapLibre GL JS is licensed under the 3-Clause BSD License. Full text of license: https://github.com/maplibre/maplibre-gl-js/blob/v3.0.0-pre.5/LICENSE.txt */
+/* MapLibre GL JS is licensed under the 3-Clause BSD License. Full text of license: https://github.com/maplibre/maplibre-gl-js/blob/v3.0.0-pre.6/LICENSE.txt */
 (function (global, factory) {
 typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
 typeof define === 'function' && define.amd ? define(factory) :
@@ -1085,6 +1085,7 @@ class AJAXError extends Error {
 const getReferrer = isWorker() ?
     () => self.worker && self.worker.referrer :
     () => (window.location.protocol === 'blob:' ? window.parent : window).location.href;
+const getProtocolAction = url => config.REGISTERED_PROTOCOLS[url.substring(0, url.indexOf('://'))];
 // Determines whether a URL is a file:// URL. This is obviously the case if it begins
 // with file://. Relative URLs are also file:// URLs iff the original document was loaded
 // via a file:// URL.
@@ -1208,8 +1209,7 @@ const makeRequest = function (requestParameters, callback) {
             return self.worker.actor.send('getResource', requestParameters, callback);
         }
         if (!isWorker()) {
-            const protocol = requestParameters.url.substring(0, requestParameters.url.indexOf('://'));
-            const action = config.REGISTERED_PROTOCOLS[protocol] || makeFetchRequest;
+            const action = getProtocolAction(requestParameters.url) || makeFetchRequest;
             return action(requestParameters, callback);
         }
     }
@@ -5478,9 +5478,8 @@ function verifyType(provided, sample) {
     return provided.kind === sample.kind;
 }
 
-// Constants
-const Xn = 0.950470, // D65 standard referent
-Yn = 1, Zn = 1.088830, t0 = 4 / 29, t1 = 6 / 29, t2 = 3 * t1 * t1, t3 = t1 * t1 * t1, deg2rad = Math.PI / 180, rad2deg = 180 / Math.PI;
+// See https://observablehq.com/@mbostock/lab-and-rgb
+const Xn = 0.96422, Yn = 1, Zn = 0.82521, t0 = 4 / 29, t1 = 6 / 29, t2 = 3 * t1 * t1, t3 = t1 * t1 * t1, deg2rad = Math.PI / 180, rad2deg = 180 / Math.PI;
 function constrainAngle(angle) {
     angle = angle % 360;
     if (angle < 0) {
@@ -5492,9 +5491,15 @@ function rgbToLab([r, g, b, alpha]) {
     r = rgb2xyz(r);
     g = rgb2xyz(g);
     b = rgb2xyz(b);
-    const x = xyz2lab((0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / Xn);
-    const y = xyz2lab((0.2126729 * r + 0.7151522 * g + 0.0721750 * b) / Yn);
-    const z = xyz2lab((0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / Zn);
+    let x, z;
+    const y = xyz2lab((0.2225045 * r + 0.7168786 * g + 0.0606169 * b) / Yn);
+    if (r === g && g === b) {
+        x = z = y;
+    }
+    else {
+        x = xyz2lab((0.4360747 * r + 0.3850649 * g + 0.1430804 * b) / Xn);
+        z = xyz2lab((0.0139322 * r + 0.0971045 * g + 0.7141733 * b) / Zn);
+    }
     const l = 116 * y - 16;
     return [(l < 0) ? 0 : l, 500 * (x - y), 200 * (y - z), alpha];
 }
@@ -5510,9 +5515,9 @@ function labToRgb([l, a, b, alpha]) {
     x = Xn * lab2xyz(x);
     z = Zn * lab2xyz(z);
     return [
-        xyz2rgb(3.2404542 * x - 1.5371385 * y - 0.4985314 * z),
-        xyz2rgb(-0.9692660 * x + 1.8760108 * y + 0.0415560 * z),
-        xyz2rgb(0.0556434 * x - 0.2040259 * y + 1.0572252 * z),
+        xyz2rgb(3.1338561 * x - 1.6168667 * y - 0.4906146 * z),
+        xyz2rgb(-0.9787684 * x + 1.9161415 * y + 0.0334540 * z),
+        xyz2rgb(0.0719453 * x - 0.2289914 * y + 1.4052427 * z),
         alpha,
     ];
 }
@@ -15340,10 +15345,13 @@ function offsetLine(rings, offset) {
 }
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
-const layout$5 = new Properties({
+/* eslint-disable */
+let layout$5;
+const getLayout$3 = () => layout$5 = layout$5 || new Properties({
     "circle-sort-key": new DataDrivenProperty(v8Spec["layout_circle"]["circle-sort-key"]),
 });
-const paint$8 = new Properties({
+let paint$8;
+const getPaint$8 = () => paint$8 = paint$8 || new Properties({
     "circle-radius": new DataDrivenProperty(v8Spec["paint_circle"]["circle-radius"]),
     "circle-color": new DataDrivenProperty(v8Spec["paint_circle"]["circle-color"]),
     "circle-blur": new DataDrivenProperty(v8Spec["paint_circle"]["circle-blur"]),
@@ -15356,7 +15364,7 @@ const paint$8 = new Properties({
     "circle-stroke-color": new DataDrivenProperty(v8Spec["paint_circle"]["circle-stroke-color"]),
     "circle-stroke-opacity": new DataDrivenProperty(v8Spec["paint_circle"]["circle-stroke-opacity"]),
 });
-var properties$8 = { paint: paint$8, layout: layout$5 };
+var properties$8 = ({ get paint() { return getPaint$8(); }, get layout() { return getLayout$3(); } });
 
 /**
  * Common utilities
@@ -23079,14 +23087,16 @@ class HeatmapBucket extends CircleBucket {
 register('HeatmapBucket', HeatmapBucket, { omit: ['layers'] });
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
-const paint$7 = new Properties({
+/* eslint-disable */
+let paint$7;
+const getPaint$7 = () => paint$7 = paint$7 || new Properties({
     "heatmap-radius": new DataDrivenProperty(v8Spec["paint_heatmap"]["heatmap-radius"]),
     "heatmap-weight": new DataDrivenProperty(v8Spec["paint_heatmap"]["heatmap-weight"]),
     "heatmap-intensity": new DataConstantProperty(v8Spec["paint_heatmap"]["heatmap-intensity"]),
     "heatmap-color": new ColorRampProperty(v8Spec["paint_heatmap"]["heatmap-color"]),
     "heatmap-opacity": new DataConstantProperty(v8Spec["paint_heatmap"]["heatmap-opacity"]),
 });
-var properties$7 = { paint: paint$7 };
+var properties$7 = ({ get paint() { return getPaint$7(); } });
 
 function createImage(image, { width, height }, channels, data) {
     if (!data) {
@@ -23273,7 +23283,9 @@ class HeatmapStyleLayer extends StyleLayer {
 }
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
-const paint$6 = new Properties({
+/* eslint-disable */
+let paint$6;
+const getPaint$6 = () => paint$6 = paint$6 || new Properties({
     "hillshade-illumination-direction": new DataConstantProperty(v8Spec["paint_hillshade"]["hillshade-illumination-direction"]),
     "hillshade-illumination-anchor": new DataConstantProperty(v8Spec["paint_hillshade"]["hillshade-illumination-anchor"]),
     "hillshade-exaggeration": new DataConstantProperty(v8Spec["paint_hillshade"]["hillshade-exaggeration"]),
@@ -23281,7 +23293,7 @@ const paint$6 = new Properties({
     "hillshade-highlight-color": new DataConstantProperty(v8Spec["paint_hillshade"]["hillshade-highlight-color"]),
     "hillshade-accent-color": new DataConstantProperty(v8Spec["paint_hillshade"]["hillshade-accent-color"]),
 });
-var properties$6 = { paint: paint$6 };
+var properties$6 = ({ get paint() { return getPaint$6(); } });
 
 class HillshadeStyleLayer extends StyleLayer {
     constructor(layer) {
@@ -24262,10 +24274,13 @@ class FillBucket {
 register('FillBucket', FillBucket, { omit: ['layers', 'patternFeatures'] });
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
-const layout$3 = new Properties({
+/* eslint-disable */
+let layout$3;
+const getLayout$2 = () => layout$3 = layout$3 || new Properties({
     "fill-sort-key": new DataDrivenProperty(v8Spec["layout_fill"]["fill-sort-key"]),
 });
-const paint$5 = new Properties({
+let paint$5;
+const getPaint$5 = () => paint$5 = paint$5 || new Properties({
     "fill-antialias": new DataConstantProperty(v8Spec["paint_fill"]["fill-antialias"]),
     "fill-opacity": new DataDrivenProperty(v8Spec["paint_fill"]["fill-opacity"]),
     "fill-color": new DataDrivenProperty(v8Spec["paint_fill"]["fill-color"]),
@@ -24274,7 +24289,7 @@ const paint$5 = new Properties({
     "fill-translate-anchor": new DataConstantProperty(v8Spec["paint_fill"]["fill-translate-anchor"]),
     "fill-pattern": new CrossFadedDataDrivenProperty(v8Spec["paint_fill"]["fill-pattern"]),
 });
-var properties$5 = { paint: paint$5, layout: layout$3 };
+var properties$5 = ({ get paint() { return getPaint$5(); }, get layout() { return getLayout$2(); } });
 
 class FillStyleLayer extends StyleLayer {
     constructor(layer) {
@@ -24832,7 +24847,9 @@ function isEntirelyOutside(ring) {
 }
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
-const paint$4 = new Properties({
+/* eslint-disable */
+let paint$4;
+const getPaint$4 = () => paint$4 = paint$4 || new Properties({
     "fill-extrusion-opacity": new DataConstantProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-opacity"]),
     "fill-extrusion-color": new DataDrivenProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-color"]),
     "fill-extrusion-translate": new DataConstantProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-translate"]),
@@ -24842,7 +24859,7 @@ const paint$4 = new Properties({
     "fill-extrusion-base": new DataDrivenProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-base"]),
     "fill-extrusion-vertical-gradient": new DataConstantProperty(v8Spec["paint_fill-extrusion"]["fill-extrusion-vertical-gradient"]),
 });
-var properties$4 = { paint: paint$4 };
+var properties$4 = ({ get paint() { return getPaint$4(); } });
 
 class Point3D extends Point$2 {
 }
@@ -25463,14 +25480,17 @@ class LineBucket {
 register('LineBucket', LineBucket, { omit: ['layers', 'patternFeatures'] });
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
-const layout$1 = new Properties({
+/* eslint-disable */
+let layout$1;
+const getLayout$1 = () => layout$1 = layout$1 || new Properties({
     "line-cap": new DataConstantProperty(v8Spec["layout_line"]["line-cap"]),
     "line-join": new DataDrivenProperty(v8Spec["layout_line"]["line-join"]),
     "line-miter-limit": new DataConstantProperty(v8Spec["layout_line"]["line-miter-limit"]),
     "line-round-limit": new DataConstantProperty(v8Spec["layout_line"]["line-round-limit"]),
     "line-sort-key": new DataDrivenProperty(v8Spec["layout_line"]["line-sort-key"]),
 });
-const paint$3 = new Properties({
+let paint$3;
+const getPaint$3 = () => paint$3 = paint$3 || new Properties({
     "line-opacity": new DataDrivenProperty(v8Spec["paint_line"]["line-opacity"]),
     "line-color": new DataDrivenProperty(v8Spec["paint_line"]["line-color"]),
     "line-translate": new DataConstantProperty(v8Spec["paint_line"]["line-translate"]),
@@ -25483,7 +25503,7 @@ const paint$3 = new Properties({
     "line-pattern": new CrossFadedDataDrivenProperty(v8Spec["paint_line"]["line-pattern"]),
     "line-gradient": new ColorRampProperty(v8Spec["paint_line"]["line-gradient"]),
 });
-var properties$3 = { paint: paint$3, layout: layout$1 };
+var properties$3 = ({ get paint() { return getPaint$3(); }, get layout() { return getLayout$1(); } });
 
 class LineFloorwidthProperty extends DataDrivenProperty {
     possiblyEvaluate(value, parameters) {
@@ -25500,12 +25520,16 @@ class LineFloorwidthProperty extends DataDrivenProperty {
         return super.evaluate(value, globals, feature, featureState);
     }
 }
-const lineFloorwidthProperty = new LineFloorwidthProperty(properties$3.paint.properties['line-width'].specification);
-lineFloorwidthProperty.useIntegerZoom = true;
+let lineFloorwidthProperty;
 class LineStyleLayer extends StyleLayer {
     constructor(layer) {
         super(layer, properties$3);
         this.gradientVersion = 0;
+        if (!lineFloorwidthProperty) {
+            lineFloorwidthProperty =
+                new LineFloorwidthProperty(properties$3.paint.properties['line-width'].specification);
+            lineFloorwidthProperty.useIntegerZoom = true;
+        }
     }
     _handleSpecialPaintPropertyUpdate(name) {
         if (name === 'line-gradient') {
@@ -28086,7 +28110,9 @@ function resolveTokens(properties, text) {
 }
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
-const layout = new Properties({
+/* eslint-disable */
+let layout;
+const getLayout = () => layout = layout || new Properties({
     "symbol-placement": new DataConstantProperty(v8Spec["layout_symbol"]["symbol-placement"]),
     "symbol-spacing": new DataConstantProperty(v8Spec["layout_symbol"]["symbol-spacing"]),
     "symbol-avoid-edges": new DataConstantProperty(v8Spec["layout_symbol"]["symbol-avoid-edges"]),
@@ -28131,7 +28157,8 @@ const layout = new Properties({
     "text-ignore-placement": new DataConstantProperty(v8Spec["layout_symbol"]["text-ignore-placement"]),
     "text-optional": new DataConstantProperty(v8Spec["layout_symbol"]["text-optional"]),
 });
-const paint$2 = new Properties({
+let paint$2;
+const getPaint$2 = () => paint$2 = paint$2 || new Properties({
     "icon-opacity": new DataDrivenProperty(v8Spec["paint_symbol"]["icon-opacity"]),
     "icon-color": new DataDrivenProperty(v8Spec["paint_symbol"]["icon-color"]),
     "icon-halo-color": new DataDrivenProperty(v8Spec["paint_symbol"]["icon-halo-color"]),
@@ -28147,7 +28174,7 @@ const paint$2 = new Properties({
     "text-translate": new DataConstantProperty(v8Spec["paint_symbol"]["text-translate"]),
     "text-translate-anchor": new DataConstantProperty(v8Spec["paint_symbol"]["text-translate-anchor"]),
 });
-var properties$2 = { paint: paint$2, layout };
+var properties$2 = ({ get paint() { return getPaint$2(); }, get layout() { return getLayout(); } });
 
 // This is an internal expression class. It is only used in GL JS and
 // has GL JS dependencies which can break the standalone style-spec module
@@ -28324,12 +28351,14 @@ function getIconPadding(layout, feature, canonical, pixelRatio = 1) {
 }
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
-const paint$1 = new Properties({
+/* eslint-disable */
+let paint$1;
+const getPaint$1 = () => paint$1 = paint$1 || new Properties({
     "background-color": new DataConstantProperty(v8Spec["paint_background"]["background-color"]),
     "background-pattern": new CrossFadedProperty(v8Spec["paint_background"]["background-pattern"]),
     "background-opacity": new DataConstantProperty(v8Spec["paint_background"]["background-opacity"]),
 });
-var properties$1 = { paint: paint$1 };
+var properties$1 = ({ get paint() { return getPaint$1(); } });
 
 class BackgroundStyleLayer extends StyleLayer {
     constructor(layer) {
@@ -28338,7 +28367,9 @@ class BackgroundStyleLayer extends StyleLayer {
 }
 
 // This file is generated. Edit build/generate-style-code.ts, then run 'npm run codegen'.
-const paint = new Properties({
+/* eslint-disable */
+let paint;
+const getPaint = () => paint = paint || new Properties({
     "raster-opacity": new DataConstantProperty(v8Spec["paint_raster"]["raster-opacity"]),
     "raster-hue-rotate": new DataConstantProperty(v8Spec["paint_raster"]["raster-hue-rotate"]),
     "raster-brightness-min": new DataConstantProperty(v8Spec["paint_raster"]["raster-brightness-min"]),
@@ -28348,7 +28379,7 @@ const paint = new Properties({
     "raster-resampling": new DataConstantProperty(v8Spec["paint_raster"]["raster-resampling"]),
     "raster-fade-duration": new DataConstantProperty(v8Spec["paint_raster"]["raster-fade-duration"]),
 });
-var properties = { paint };
+var properties = ({ get paint() { return getPaint(); } });
 
 class RasterStyleLayer extends StyleLayer {
     constructor(layer) {
@@ -31096,6 +31127,7 @@ exports.getArrayBuffer = getArrayBuffer;
 exports.getDefaultExportFromCjs = getDefaultExportFromCjs;
 exports.getJSON = getJSON;
 exports.getOverlapMode = getOverlapMode;
+exports.getProtocolAction = getProtocolAction;
 exports.getRTLTextPluginStatus = getRTLTextPluginStatus;
 exports.getReferrer = getReferrer;
 exports.getVideo = getVideo;
@@ -31136,6 +31168,7 @@ exports.renderColorRamp = renderColorRamp;
 exports.rotate = rotate$4;
 exports.rotateX = rotateX$3;
 exports.rotateZ = rotateZ$3;
+exports.sameOrigin = sameOrigin;
 exports.scale = scale$5;
 exports.scale$1 = scale$4;
 exports.setRTLTextPlugin = setRTLTextPlugin;
@@ -33785,196 +33818,9 @@ return Worker;
 
 define(['./shared'], (function (performance) { 'use strict';
 
-var mapboxGlSupported = {};
-
-'use strict';
-
-var supported = mapboxGlSupported.supported = isSupported;
-var notSupportedReason_1 = mapboxGlSupported.notSupportedReason = notSupportedReason;
-
-/**
- * Test whether the current browser supports Mapbox GL JS
- * @param {Object} options
- * @param {boolean} [options.failIfMajorPerformanceCaveat=false] Return `false`
- *   if the performance of Mapbox GL JS would be dramatically worse than
- *   expected (i.e. a software renderer is would be used)
- * @return {boolean}
- */
-function isSupported(options) {
-    return !notSupportedReason(options);
-}
-
-function notSupportedReason(options) {
-    if (!isBrowser()) return 'not a browser';
-    if (!isArraySupported()) return 'insufficent Array support';
-    if (!isFunctionSupported()) return 'insufficient Function support';
-    if (!isObjectSupported()) return 'insufficient Object support';
-    if (!isJSONSupported()) return 'insufficient JSON support';
-    if (!isWorkerSupported()) return 'insufficient worker support';
-    if (!isUint8ClampedArraySupported()) return 'insufficient Uint8ClampedArray support';
-    if (!isArrayBufferSupported()) return 'insufficient ArrayBuffer support';
-    if (!isCanvasGetImageDataSupported()) return 'insufficient Canvas/getImageData support';
-    if (!isWebGLSupportedCached(options && options.failIfMajorPerformanceCaveat)) return 'insufficient WebGL support';
-    if (!isNotIE()) return 'insufficient ECMAScript 6 support';
-}
-
-function isBrowser() {
-    return typeof window !== 'undefined' && typeof document !== 'undefined';
-}
-
-function isArraySupported() {
-    return (
-        Array.prototype &&
-        Array.prototype.every &&
-        Array.prototype.filter &&
-        Array.prototype.forEach &&
-        Array.prototype.indexOf &&
-        Array.prototype.lastIndexOf &&
-        Array.prototype.map &&
-        Array.prototype.some &&
-        Array.prototype.reduce &&
-        Array.prototype.reduceRight &&
-        Array.isArray
-    );
-}
-
-function isFunctionSupported() {
-    return Function.prototype && Function.prototype.bind;
-}
-
-function isObjectSupported() {
-    return (
-        Object.keys &&
-        Object.create &&
-        Object.getPrototypeOf &&
-        Object.getOwnPropertyNames &&
-        Object.isSealed &&
-        Object.isFrozen &&
-        Object.isExtensible &&
-        Object.getOwnPropertyDescriptor &&
-        Object.defineProperty &&
-        Object.defineProperties &&
-        Object.seal &&
-        Object.freeze &&
-        Object.preventExtensions
-    );
-}
-
-function isJSONSupported() {
-    return 'JSON' in window && 'parse' in JSON && 'stringify' in JSON;
-}
-
-function isWorkerSupported() {
-    if (!('Worker' in window && 'Blob' in window && 'URL' in window)) {
-        return false;
-    }
-
-    var blob = new Blob([''], { type: 'text/javascript' });
-    var workerURL = URL.createObjectURL(blob);
-    var supported;
-    var worker;
-
-    try {
-        worker = new Worker(workerURL);
-        supported = true;
-    } catch (e) {
-        supported = false;
-    }
-
-    if (worker) {
-        worker.terminate();
-    }
-    URL.revokeObjectURL(workerURL);
-
-    return supported;
-}
-
-// IE11 only supports `Uint8ClampedArray` as of version
-// [KB2929437](https://support.microsoft.com/en-us/kb/2929437)
-function isUint8ClampedArraySupported() {
-    return 'Uint8ClampedArray' in window;
-}
-
-// https://github.com/mapbox/mapbox-gl-supported/issues/19
-function isArrayBufferSupported() {
-    return ArrayBuffer.isView;
-}
-
-// Some browsers or browser extensions block access to canvas data to prevent fingerprinting.
-// Mapbox GL uses this API to load sprites and images in general.
-function isCanvasGetImageDataSupported() {
-    var canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 1;
-    var context = canvas.getContext('2d');
-    if (!context) {
-        return false;
-    }
-    var imageData = context.getImageData(0, 0, 1, 1);
-    return imageData && imageData.width === canvas.width;
-}
-
-var isWebGLSupportedCache = {};
-function isWebGLSupportedCached(failIfMajorPerformanceCaveat) {
-
-    if (isWebGLSupportedCache[failIfMajorPerformanceCaveat] === undefined) {
-        isWebGLSupportedCache[failIfMajorPerformanceCaveat] = isWebGLSupported(failIfMajorPerformanceCaveat);
-    }
-
-    return isWebGLSupportedCache[failIfMajorPerformanceCaveat];
-}
-
-isSupported.webGLContextAttributes = {
-    antialias: false,
-    alpha: true,
-    stencil: true,
-    depth: true
-};
-
-function getWebGLContext(failIfMajorPerformanceCaveat) {
-    var canvas = document.createElement('canvas');
-
-    var attributes = Object.create(isSupported.webGLContextAttributes);
-    attributes.failIfMajorPerformanceCaveat = failIfMajorPerformanceCaveat;
-
-    return (
-        canvas.getContext('webgl', attributes) ||
-        canvas.getContext('experimental-webgl', attributes)
-    );
-}
-
-function isWebGLSupported(failIfMajorPerformanceCaveat) {
-    var gl = getWebGLContext(failIfMajorPerformanceCaveat);
-    if (!gl) {
-        return false;
-    }
-
-    // Try compiling a shader and get its compile status. Some browsers like Brave block this API
-    // to prevent fingerprinting. Unfortunately, this also means that Mapbox GL won't work.
-    var shader;
-    try {
-        shader = gl.createShader(gl.VERTEX_SHADER);
-    } catch (e) {
-        // some older browsers throw an exception that `createShader` is not defined
-        // so handle this separately from the case where browsers block `createShader`
-        // for security reasons
-        return false;
-    }
-
-    if (!shader || gl.isContextLost()) {
-        return false;
-    }
-    gl.shaderSource(shader, 'void main() {}');
-    gl.compileShader(shader);
-    return gl.getShaderParameter(shader, gl.COMPILE_STATUS) === true;
-}
-
-function isNotIE() {
-    return !document.documentMode;
-}
-
 var name = "maplibre-gl";
 var description = "BSD licensed community fork of mapbox-gl, a WebGL interactive maps library";
-var version$2 = "3.0.0-pre.5";
+var version$2 = "3.0.0-pre.6";
 var main = "dist/maplibre-gl.js";
 var style = "dist/maplibre-gl.css";
 var license = "BSD-3-Clause";
@@ -33988,13 +33834,12 @@ var type = "module";
 var dependencies = {
 	"@mapbox/geojson-rewind": "^0.5.2",
 	"@mapbox/jsonlint-lines-primitives": "^2.0.2",
-	"@mapbox/mapbox-gl-supported": "^2.0.1",
 	"@mapbox/point-geometry": "^0.1.0",
 	"@mapbox/tiny-sdf": "^2.0.6",
 	"@mapbox/unitbezier": "^0.0.1",
 	"@mapbox/vector-tile": "^1.3.1",
 	"@mapbox/whoots-js": "^3.1.0",
-	"@maplibre/maplibre-gl-style-spec": "^19.0.1",
+	"@maplibre/maplibre-gl-style-spec": "^19.1.0",
 	"@types/geojson": "^7946.0.10",
 	"@types/kdbush": "^3.0.2",
 	"@types/mapbox__point-geometry": "^0.1.2",
@@ -34031,46 +33876,48 @@ var devDependencies = {
 	"@types/eslint": "^8.37.0",
 	"@types/gl": "^6.0.2",
 	"@types/glob": "^8.1.0",
-	"@types/jest": "^29.5.0",
+	"@types/jest": "^29.5.1",
 	"@types/jsdom": "^21.1.1",
 	"@types/minimist": "^1.2.2",
-	"@types/murmurhash-js": "^1.0.3",
+	"@types/murmurhash-js": "^1.0.4",
 	"@types/nise": "^1.4.1",
-	"@types/node": "^18.15.11",
+	"@types/node": "^20.1.0",
 	"@types/offscreencanvas": "^2019.7.0",
 	"@types/pixelmatch": "^5.2.4",
 	"@types/pngjs": "^6.0.1",
-	"@types/react": "^18.0.35",
-	"@types/react-dom": "^18.0.11",
+	"@types/react": "^18.2.6",
+	"@types/react-dom": "^18.2.4",
 	"@types/request": "^2.48.8",
 	"@types/shuffle-seed": "^1.1.0",
 	"@types/supercluster": "^7.1.0",
 	"@types/window-or-global": "^1.0.4",
-	"@typescript-eslint/eslint-plugin": "^5.58.0",
-	"@typescript-eslint/parser": "^5.58.0",
+	"@typescript-eslint/eslint-plugin": "^5.59.0",
+	"@typescript-eslint/parser": "^5.59.2",
 	address: "^1.2.2",
 	benchmark: "^2.1.4",
 	canvas: "^2.11.2",
-	cssnano: "^6.0.0",
+	cssnano: "^6.0.1",
 	d3: "^7.8.4",
 	"d3-queue": "^3.0.7",
+	"devtools-protocol": "^0.0.1120988",
 	diff: "^5.1.0",
 	documentation: "14.0.1",
 	"dts-bundle-generator": "^8.0.1",
-	eslint: "^8.38.0",
+	eslint: "^8.40.0",
 	"eslint-config-mourner": "^3.0.0",
 	"eslint-plugin-html": "^7.1.0",
 	"eslint-plugin-import": "^2.27.5",
 	"eslint-plugin-jest": "^27.2.1",
-	"eslint-plugin-jsdoc": "^41.1.2",
+	"eslint-plugin-jsdoc": "^44.0.0",
 	"eslint-plugin-react": "^7.32.2",
+	expect: "^29.5.0",
 	gl: "^6.0.2",
-	glob: "^10.1.0",
+	glob: "^10.2.2",
 	"is-builtin-module": "^3.2.1",
 	jest: "^29.5.0",
 	"jest-canvas-mock": "^2.5.0",
 	"jest-environment-jsdom": "^29.5.0",
-	jsdom: "^21.1.1",
+	jsdom: "^22.0.0",
 	"json-stringify-pretty-compact": "^4.0.0",
 	minimist: "^1.2.8",
 	"mock-geolocation": "^1.0.11",
@@ -34080,25 +33927,26 @@ var devDependencies = {
 	"npm-run-all": "^4.1.5",
 	"pdf-merger-js": "^4.3.0",
 	pixelmatch: "^5.3.0",
-	playwright: "^1.32.3",
 	pngjs: "^7.0.0",
-	postcss: "^8.4.22",
+	postcss: "^8.4.23",
 	"postcss-cli": "^10.1.0",
 	"postcss-inline-svg": "^6.0.0",
 	"pretty-bytes": "^6.1.0",
+	puppeteer: "^20.1.1",
 	react: "^18.2.0",
 	"react-dom": "^18.2.0",
-	rollup: "^3.20.4",
+	rollup: "^3.21.5",
 	"rollup-plugin-sourcemaps": "^0.6.3",
 	rw: "^1.3.3",
-	semver: "^7.4.0",
+	semver: "^7.5.0",
 	"shuffle-seed": "^1.1.6",
 	"source-map-explorer": "^2.5.3",
 	st: "^3.0.0",
-	stylelint: "^15.5.0",
+	stylelint: "^15.6.1",
 	"stylelint-config-standard": "^33.0.0",
 	"ts-jest": "^29.1.0",
 	"ts-node": "^10.9.1",
+	tslib: "^2.5.0",
 	typescript: "^5.0.4"
 };
 var overrides = {
@@ -34393,9 +34241,10 @@ var ImageRequest;
      * Request to load an image.
      * @param {RequestParameters} requestParameters Request parameters.
      * @param {GetImageCallback} callback Callback to issue when the request completes.
+     * @param {supportImageRefresh} supportImageRefresh true, if the image request need to support refresh based on cache headers.
      * @returns {Cancelable} Cancelable request.
      */
-    ImageRequest.getImage = (requestParameters, callback) => {
+    ImageRequest.getImage = (requestParameters, callback, supportImageRefresh = true) => {
         if (exported$1.supported) {
             if (!requestParameters.headers) {
                 requestParameters.headers = {};
@@ -34404,6 +34253,7 @@ var ImageRequest;
         }
         const queued = {
             requestParameters,
+            supportImageRefresh,
             callback,
             cancelled: false,
             completed: false,
@@ -34426,36 +34276,54 @@ var ImageRequest;
         }
     };
     const doImageRequest = (itemInQueue) => {
-        const { requestParameters, callback } = itemInQueue;
-        // request the image with XHR to work around caching issues
-        // see https://github.com/mapbox/mapbox-gl-js/issues/1470
-        return performance.makeRequest(performance.extend(requestParameters, { type: 'image' }), (err, data, cacheControl, expires) => {
-            if (err) {
-                callback(err);
-            }
-            else if (data instanceof HTMLImageElement || data instanceof ImageBitmap) {
-                // User using addProtocol can directly return HTMLImageElement/ImageBitmap type
-                callback(null, data);
-            }
-            else if (data) {
-                const decoratedCallback = (imgErr, imgResult) => {
-                    if (imgErr != null) {
-                        callback(imgErr);
-                    }
-                    else if (imgResult != null) {
-                        callback(null, imgResult, { cacheControl, expires });
-                    }
-                };
-                arrayBufferToCanvasImageSource(data, decoratedCallback);
-            }
-            if (!itemInQueue.cancelled) {
-                itemInQueue.completed = true;
-                currentParallelImageRequests--;
-                if (!isThrottled()) {
-                    ImageRequest.processQueue();
-                }
-            }
+        const { requestParameters, supportImageRefresh, callback } = itemInQueue;
+        performance.extend(requestParameters, { type: 'image' });
+        // - If refreshExpiredTiles is false, then we can use HTMLImageElement to download raster images.
+        // - Fetch/XHR (via MakeRequest API) will be used to download images for following scenarios:
+        //      1. Style image sprite will had a issue with HTMLImageElement as described
+        //          here: https://github.com/mapbox/mapbox-gl-js/issues/1470
+        //      2. If refreshExpiredTiles is true (default), then in order to read the image cache header,
+        //          fetch/XHR request will be required
+        // - For any special case handling like use of AddProtocol, worker initiated request or additional headers
+        //      let makeRequest handle it.
+        // - HtmlImageElement request automatically adds accept header for all the browser supported images
+        const canUseHTMLImageElement = supportImageRefresh === false &&
+            !performance.isWorker() &&
+            !performance.getProtocolAction(requestParameters.url) &&
+            (!requestParameters.headers ||
+                Object.keys(requestParameters.headers).reduce((acc, item) => acc && item === 'accept', true));
+        const action = canUseHTMLImageElement ? getImageUsingHtmlImage : performance.makeRequest;
+        return action(requestParameters, (err, data, cacheControl, expires) => {
+            onImageResponse(itemInQueue, callback, err, data, cacheControl, expires);
         });
+    };
+    const onImageResponse = (itemInQueue, callback, err, data, cacheControl, expires) => {
+        if (err) {
+            callback(err);
+        }
+        else if (data instanceof HTMLImageElement || data instanceof ImageBitmap) {
+            // User using addProtocol can directly return HTMLImageElement/ImageBitmap type
+            // If HtmlImageElement is used to get image then response type will be HTMLImageElement
+            callback(null, data);
+        }
+        else if (data) {
+            const decoratedCallback = (imgErr, imgResult) => {
+                if (imgErr != null) {
+                    callback(imgErr);
+                }
+                else if (imgResult != null) {
+                    callback(null, imgResult, { cacheControl, expires });
+                }
+            };
+            arrayBufferToCanvasImageSource(data, decoratedCallback);
+        }
+        if (!itemInQueue.cancelled) {
+            itemInQueue.completed = true;
+            currentParallelImageRequests--;
+            if (!isThrottled()) {
+                ImageRequest.processQueue();
+            }
+        }
     };
     /**
      * Process some number of items in the image request queue.
@@ -34487,6 +34355,37 @@ var ImageRequest;
             topItemInQueue.cancel = () => cancelRequest(topItemInQueue);
         }
         return imageRequestQueue.length;
+    };
+    const getImageUsingHtmlImage = (requestParameters, callback) => {
+        const image = new Image();
+        const url = requestParameters.url;
+        let requestCancelled = false;
+        const credentials = requestParameters.credentials;
+        if (credentials && credentials === 'include') {
+            image.crossOrigin = 'use-credentials';
+        }
+        else if ((credentials && credentials === 'same-origin') || !performance.sameOrigin(url)) {
+            image.crossOrigin = 'anonymous';
+        }
+        image.fetchPriority = 'high';
+        image.onload = () => {
+            callback(null, image);
+            image.onerror = image.onload = null;
+        };
+        image.onerror = () => {
+            if (!requestCancelled) {
+                callback(new Error('Could not load image. Please make sure to use a supported image type such as PNG or JPEG. Note that SVGs are not supported.'));
+            }
+            image.onerror = image.onload = null;
+        };
+        image.src = url;
+        return {
+            cancel: () => {
+                requestCancelled = true;
+                // Set src to '' to actually cancel the request
+                image.src = '';
+            }
+        };
     };
 })(ImageRequest || (ImageRequest = {}));
 ImageRequest.resetRequestQueue();
@@ -35311,20 +35210,21 @@ class LightPositionProperty {
         };
     }
 }
-const properties = new performance.Properties({
-    'anchor': new performance.DataConstantProperty(performance.v8Spec.light.anchor),
-    'position': new LightPositionProperty(),
-    'color': new performance.DataConstantProperty(performance.v8Spec.light.color),
-    'intensity': new performance.DataConstantProperty(performance.v8Spec.light.intensity),
-});
 const TRANSITION_SUFFIX = '-transition';
+let lightProperties;
 /*
  * Represents the light used to light extruded features.
  */
 class Light extends performance.Evented {
     constructor(lightOptions) {
         super();
-        this._transitionable = new performance.Transitionable(properties);
+        lightProperties = lightProperties || new performance.Properties({
+            'anchor': new performance.DataConstantProperty(performance.v8Spec.light.anchor),
+            'position': new LightPositionProperty(),
+            'color': new performance.DataConstantProperty(performance.v8Spec.light.color),
+            'intensity': new performance.DataConstantProperty(performance.v8Spec.light.intensity),
+        });
+        this._transitionable = new performance.Transitionable(lightProperties);
         this.setLight(lightOptions);
         this._transitioning = this._transitionable.untransitioned();
     }
@@ -35703,6 +35603,9 @@ class LngLatBounds {
                     const lngLatObj = obj;
                     return this.extend(performance.LngLat.convert(lngLatObj));
                 }
+            }
+            else if (obj && ('lng' in obj || 'lon' in obj) && 'lat' in obj) {
+                return this.extend(performance.LngLat.convert(obj));
             }
             return this;
         }
@@ -36150,7 +36053,7 @@ class RasterTileSource extends performance.Evented {
                 callback(err);
             }
             else if (img) {
-                if (this.map._refreshExpiredTiles)
+                if (this.map._refreshExpiredTiles && expiry)
                     tile.setExpiryData(expiry);
                 const context = this.map.painter.context;
                 const gl = context.gl;
@@ -36168,7 +36071,7 @@ class RasterTileSource extends performance.Evented {
                 tile.state = 'loaded';
                 callback(null);
             }
-        });
+        }, this.map._refreshExpiredTiles);
     }
     abortTile(tile, callback) {
         if (tile.request) {
@@ -36217,7 +36120,7 @@ class RasterDEMTileSource extends RasterTileSource {
     }
     loadTile(tile, callback) {
         const url = tile.tileID.canonical.url(this.tiles, this.map.getPixelRatio(), this.scheme);
-        tile.request = ImageRequest$1.getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile), imageLoaded.bind(this));
+        tile.request = ImageRequest$1.getImage(this.map._requestManager.transformRequest(url, ResourceType.Tile), imageLoaded.bind(this), this.map._refreshExpiredTiles);
         tile.neighboringTiles = this._getNeighboringTiles(tile.tileID);
         function imageLoaded(err, img) {
             delete tile.request;
@@ -38558,7 +38461,7 @@ class SourceCache extends performance.Evented {
             for (const id of ids) {
                 const tileID = retain[id];
                 const tile = this._tiles[id];
-                if (!tile || tile.fadeEndTime && tile.fadeEndTime <= performance.exported.now())
+                if (!tile || tile.fadeEndTime !== undefined && tile.fadeEndTime <= performance.exported.now())
                     continue;
                 // if the tile is loaded but still fading in, find parents to cross-fade with it
                 const parentTile = this.findLoadedParent(tileID, minCoveringZoom);
@@ -39006,8 +38909,9 @@ class WorkerPool {
         return Object.keys(this.active).length;
     }
 }
+// Based on results from A/B testing: https://github.com/maplibre/maplibre-gl-js/pull/2354
 const availableLogicalProcessors = Math.floor(performance.exported.hardwareConcurrency / 2);
-WorkerPool.workerCount = Math.max(Math.min(availableLogicalProcessors, 6), 1);
+WorkerPool.workerCount = performance.isSafari(globalThis) ? Math.max(Math.min(availableLogicalProcessors, 3), 1) : 1;
 
 let globalWorkerPool;
 /**
@@ -42932,11 +42836,11 @@ class VertexArrayObject {
             this.boundDynamicVertexBuffer !== dynamicVertexBuffer ||
             this.boundDynamicVertexBuffer2 !== dynamicVertexBuffer2 ||
             this.boundDynamicVertexBuffer3 !== dynamicVertexBuffer3);
-        if (!context.extVertexArrayObject || isFreshBindRequired) {
+        if (isFreshBindRequired) {
             this.freshBind(program, layoutVertexBuffer, paintVertexBuffers, indexBuffer, vertexOffset, dynamicVertexBuffer, dynamicVertexBuffer2, dynamicVertexBuffer3);
         }
         else {
-            context.bindVertexArrayOES.set(this.vao);
+            context.bindVertexArray.set(this.vao);
             if (dynamicVertexBuffer) {
                 // The buffer may have been updated. Rebind to upload data.
                 dynamicVertexBuffer.bind();
@@ -42953,36 +42857,22 @@ class VertexArrayObject {
         }
     }
     freshBind(program, layoutVertexBuffer, paintVertexBuffers, indexBuffer, vertexOffset, dynamicVertexBuffer, dynamicVertexBuffer2, dynamicVertexBuffer3) {
-        let numPrevAttributes;
         const numNextAttributes = program.numAttributes;
         const context = this.context;
         const gl = context.gl;
-        if (context.extVertexArrayObject) {
-            if (this.vao)
-                this.destroy();
-            this.vao = context.extVertexArrayObject.createVertexArrayOES();
-            context.bindVertexArrayOES.set(this.vao);
-            numPrevAttributes = 0;
-            // store the arguments so that we can verify them when the vao is bound again
-            this.boundProgram = program;
-            this.boundLayoutVertexBuffer = layoutVertexBuffer;
-            this.boundPaintVertexBuffers = paintVertexBuffers;
-            this.boundIndexBuffer = indexBuffer;
-            this.boundVertexOffset = vertexOffset;
-            this.boundDynamicVertexBuffer = dynamicVertexBuffer;
-            this.boundDynamicVertexBuffer2 = dynamicVertexBuffer2;
-            this.boundDynamicVertexBuffer3 = dynamicVertexBuffer3;
-        }
-        else {
-            numPrevAttributes = context.currentNumAttributes || 0;
-            // Disable all attributes from the previous program that aren't used in
-            // the new program. Note: attribute indices are *not* program specific!
-            for (let i = numNextAttributes; i < numPrevAttributes; i++) {
-                // WebGL breaks if you disable attribute 0, so if i == 0.
-                // http://stackoverflow.com/questions/20305231
-                gl.disableVertexAttribArray(i);
-            }
-        }
+        if (this.vao)
+            this.destroy();
+        this.vao = context.createVertexArray();
+        context.bindVertexArray.set(this.vao);
+        // store the arguments so that we can verify them when the vao is bound again
+        this.boundProgram = program;
+        this.boundLayoutVertexBuffer = layoutVertexBuffer;
+        this.boundPaintVertexBuffers = paintVertexBuffers;
+        this.boundIndexBuffer = indexBuffer;
+        this.boundVertexOffset = vertexOffset;
+        this.boundDynamicVertexBuffer = dynamicVertexBuffer;
+        this.boundDynamicVertexBuffer2 = dynamicVertexBuffer2;
+        this.boundDynamicVertexBuffer3 = dynamicVertexBuffer3;
         layoutVertexBuffer.enableAttributes(gl, program);
         for (const vertexBuffer of paintVertexBuffers) {
             vertexBuffer.enableAttributes(gl, program);
@@ -43021,7 +42911,7 @@ class VertexArrayObject {
     }
     destroy() {
         if (this.vao) {
-            this.context.extVertexArrayObject.deleteVertexArrayOES(this.vao);
+            this.context.deleteVertexArray(this.vao);
             this.vao = null;
         }
     }
@@ -43928,6 +43818,18 @@ class VertexBuffer {
     }
 }
 
+const cache = new WeakMap();
+function isWebGL2(gl) {
+    if (cache.has(gl)) {
+        return cache.get(gl);
+    }
+    else {
+        const value = gl.getParameter(gl.VERSION).startsWith('WebGL 2.0');
+        cache.set(gl, value);
+        return value;
+    }
+}
+
 class BaseValue {
     constructor(context) {
         this.gl = context.gl;
@@ -44315,18 +44217,21 @@ class BindElementBuffer extends BaseValue {
         this.dirty = false;
     }
 }
-class BindVertexArrayOES extends BaseValue {
-    constructor(context) {
-        super(context);
-        this.vao = context.extVertexArrayObject;
-    }
+class BindVertexArray extends BaseValue {
     getDefault() {
         return null;
     }
     set(v) {
-        if (!this.vao || v === this.current && !this.dirty)
+        var _a;
+        if (v === this.current && !this.dirty)
             return;
-        this.vao.bindVertexArrayOES(v);
+        const gl = this.gl;
+        if (isWebGL2(gl)) {
+            gl.bindVertexArray(v);
+        }
+        else {
+            (_a = gl.getExtension('OES_vertex_array_object')) === null || _a === void 0 ? void 0 : _a.bindVertexArrayOES(v);
+        }
         this.current = v;
         this.dirty = false;
     }
@@ -44473,7 +44378,6 @@ ColorMode.alphaBlended = new ColorMode([ONE, ONE_MINUS_SRC_ALPHA], performance.C
 class Context {
     constructor(gl) {
         this.gl = gl;
-        this.extVertexArrayObject = this.gl.getExtension('OES_vertex_array_object');
         this.clearColor = new ClearColor(this);
         this.clearDepth = new ClearDepth(this);
         this.clearStencil = new ClearStencil(this);
@@ -44501,23 +44405,21 @@ class Context {
         this.bindTexture = new BindTexture(this);
         this.bindVertexBuffer = new BindVertexBuffer(this);
         this.bindElementBuffer = new BindElementBuffer(this);
-        this.bindVertexArrayOES = this.extVertexArrayObject && new BindVertexArrayOES(this);
+        this.bindVertexArray = new BindVertexArray(this);
         this.pixelStoreUnpack = new PixelStoreUnpack(this);
         this.pixelStoreUnpackPremultiplyAlpha = new PixelStoreUnpackPremultiplyAlpha(this);
         this.pixelStoreUnpackFlipY = new PixelStoreUnpackFlipY(this);
-        this.extTextureFilterAnisotropic = (gl.getExtension('EXT_texture_filter_anisotropic') ||
-            gl.getExtension('MOZ_EXT_texture_filter_anisotropic') ||
-            gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic'));
+        this.extTextureFilterAnisotropic = gl.getExtension('EXT_texture_filter_anisotropic');
         if (this.extTextureFilterAnisotropic) {
             this.extTextureFilterAnisotropicMax = gl.getParameter(this.extTextureFilterAnisotropic.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
         }
-        this.extTextureHalfFloat = gl.getExtension('OES_texture_half_float');
-        if (this.extTextureHalfFloat) {
-            gl.getExtension('OES_texture_half_float_linear');
-            this.extRenderToTextureHalfFloat = gl.getExtension('EXT_color_buffer_half_float');
-        }
-        this.extTimerQuery = gl.getExtension('EXT_disjoint_timer_query');
         this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        const extTextureHalfFloat = gl.getExtension('OES_texture_half_float');
+        this.HALF_FLOAT = isWebGL2(gl) ? gl.HALF_FLOAT : extTextureHalfFloat === null || extTextureHalfFloat === void 0 ? void 0 : extTextureHalfFloat.HALF_FLOAT_OES;
+        gl.getExtension('OES_texture_half_float_linear');
+        const extColorBufferHalfFloat = gl.getExtension('EXT_color_buffer_half_float');
+        this.RGBA16F = isWebGL2(gl) ? gl.RGBA16F : extColorBufferHalfFloat === null || extColorBufferHalfFloat === void 0 ? void 0 : extColorBufferHalfFloat.RGBA16F_EXT;
+        this.RGB16F = isWebGL2(gl) ? gl.RGB16F : extColorBufferHalfFloat === null || extColorBufferHalfFloat === void 0 ? void 0 : extColorBufferHalfFloat.RGB16F_EXT;
     }
     setDefault() {
         this.unbindVAO();
@@ -44575,9 +44477,7 @@ class Context {
         this.bindTexture.dirty = true;
         this.bindVertexBuffer.dirty = true;
         this.bindElementBuffer.dirty = true;
-        if (this.extVertexArrayObject) {
-            this.bindVertexArrayOES.dirty = true;
-        }
+        this.bindVertexArray.dirty = true;
         this.pixelStoreUnpack.dirty = true;
         this.pixelStoreUnpackPremultiplyAlpha.dirty = true;
         this.pixelStoreUnpackFlipY.dirty = true;
@@ -44669,12 +44569,22 @@ class Context {
         }
         this.colorMask.set(colorMode.mask);
     }
+    createVertexArray() {
+        var _a;
+        if (isWebGL2(this.gl))
+            return this.gl.createVertexArray();
+        return (_a = this.gl.getExtension('OES_vertex_array_object')) === null || _a === void 0 ? void 0 : _a.createVertexArrayOES();
+    }
+    deleteVertexArray(x) {
+        var _a;
+        if (isWebGL2(this.gl))
+            return this.gl.deleteVertexArray(x);
+        return (_a = this.gl.getExtension('OES_vertex_array_object')) === null || _a === void 0 ? void 0 : _a.deleteVertexArrayOES(x);
+    }
     unbindVAO() {
         // Unbinding the VAO prevents other things (custom layers, new buffer creation) from
         // unintentionally changing the state of the last VAO used.
-        if (this.extVertexArrayObject) {
-            this.bindVertexArrayOES.set(null);
-        }
+        this.bindVertexArray.set(null);
     }
 }
 
@@ -45216,11 +45126,13 @@ function bindFramebuffer(context, painter, layer) {
     }
 }
 function bindTextureToFramebuffer(context, painter, texture, fbo) {
+    var _a, _b;
     const gl = context.gl;
     // Use the higher precision half-float texture where available (producing much smoother looking heatmaps);
     // Otherwise, fall back to a low precision texture
-    const internalFormat = context.extRenderToTextureHalfFloat ? context.extTextureHalfFloat.HALF_FLOAT_OES : gl.UNSIGNED_BYTE;
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, painter.width / 4, painter.height / 4, 0, gl.RGBA, internalFormat, null);
+    const numType = (_a = context.HALF_FLOAT) !== null && _a !== void 0 ? _a : gl.UNSIGNED_BYTE;
+    const internalFormat = (_b = context.RGBA16F) !== null && _b !== void 0 ? _b : gl.RGBA;
+    gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, painter.width / 4, painter.height / 4, 0, gl.RGBA, numType, null);
     fbo.colorAttachment.set(texture);
 }
 function renderTextureToMap(painter, layer) {
@@ -45938,7 +45850,7 @@ const draw = {
 /**
  * Initialize a new painter object.
  *
- * @param {Canvas} gl an experimental-webgl drawing context
+ * @param {Canvas} gl a webgl drawing context
  * @private
  */
 class Painter {
@@ -45953,7 +45865,6 @@ class Painter {
         this.numSublayers = SourceCache.maxUnderzooming + SourceCache.maxOverzooming + 1;
         this.depthEpsilon = 1 / Math.pow(2, 16);
         this.crossTileSymbolIndex = new CrossTileSymbolIndex();
-        this.gpuTimers = {};
     }
     /*
      * Update the GL viewport, projection matrix, and transforms to compensate
@@ -46237,50 +46148,7 @@ class Painter {
         if (layer.type !== 'background' && layer.type !== 'custom' && !(coords || []).length)
             return;
         this.id = layer.id;
-        this.gpuTimingStart(layer);
         draw[layer.type](painter, sourceCache, layer, coords, this.style.placement.variableOffsets);
-        this.gpuTimingEnd();
-    }
-    gpuTimingStart(layer) {
-        if (!this.options.gpuTiming)
-            return;
-        const ext = this.context.extTimerQuery;
-        // This tries to time the draw call itself, but note that the cost for drawing a layer
-        // may be dominated by the cost of uploading vertices to the GPU.
-        // To instrument that, we'd need to pass the layerTimers object down into the bucket
-        // uploading logic.
-        let layerTimer = this.gpuTimers[layer.id];
-        if (!layerTimer) {
-            layerTimer = this.gpuTimers[layer.id] = {
-                calls: 0,
-                cpuTime: 0,
-                query: ext.createQueryEXT()
-            };
-        }
-        layerTimer.calls++;
-        ext.beginQueryEXT(ext.TIME_ELAPSED_EXT, layerTimer.query);
-    }
-    gpuTimingEnd() {
-        if (!this.options.gpuTiming)
-            return;
-        const ext = this.context.extTimerQuery;
-        ext.endQueryEXT(ext.TIME_ELAPSED_EXT);
-    }
-    collectGpuTimers() {
-        const currentLayerTimers = this.gpuTimers;
-        this.gpuTimers = {};
-        return currentLayerTimers;
-    }
-    queryGpuTimers(gpuTimers) {
-        const layers = {};
-        for (const layerId in gpuTimers) {
-            const gpuTimer = gpuTimers[layerId];
-            const ext = this.context.extTimerQuery;
-            const gpuTime = ext.getQueryObjectEXT(gpuTimer.query, ext.QUERY_RESULT_EXT) / (1000 * 1000);
-            ext.deleteQueryEXT(gpuTimer.query);
-            layers[layerId] = gpuTime;
-        }
-        return layers;
     }
     /**
      * Transform a matrix to incorporate the *-translate and *-translate-anchor properties into it.
@@ -52080,7 +51948,7 @@ const defaultOptions$4 = {
  * @param {RequestTransformFunction} [options.transformRequest=null] A callback run before the Map makes a request for an external URL. The callback can be used to modify the url, set headers, or set the credentials property for cross-origin requests.
  * Expected to return an object with a `url` property and optionally `headers` and `credentials` properties.
  * @param {boolean} [options.collectResourceTiming=false] If `true`, Resource Timing API information will be collected for requests made by GeoJSON and Vector Tile web workers (this information is normally inaccessible from the main Javascript thread). Information will be returned in a `resourceTiming` property of relevant `data` events.
- * @param {number} [options.fadeDuration=300] Controls the duration of the fade-in/fade-out animation for label collisions, in milliseconds. This setting affects all symbol layers. This setting does not affect the duration of runtime styling transitions or raster tile cross-fading.
+ * @param {number} [options.fadeDuration=300] Controls the duration of the fade-in/fade-out animation for label collisions after initial map load, in milliseconds. This setting affects all symbol layers. This setting does not affect the duration of runtime styling transitions or raster tile cross-fading.
  * @param {boolean} [options.crossSourceCollisions=true] If `true`, symbols from multiple sources can collide with each other during collision detection. If `false`, collision detection is run separately for the symbols in each source.
  * @param {Object} [options.locale=null] A patch to apply to the default localization table for UI strings, e.g. control tooltips. The `locale` object maps namespaced UI string IDs to translated strings in the target language; see `src/ui/default_locale.js` for an example with all supported string IDs. The object may specify all UI strings (thereby adding support for a new translation) or only a subset of strings (thereby patching the default translation table).
  * @param {number} [options.pixelRatio] The pixel ratio. The canvas' `width` attribute will be `container.clientWidth * pixelRatio` and its `height` attribute will be `container.clientHeight * pixelRatio`. Defaults to `devicePixelRatio` if not specified.
@@ -52175,6 +52043,7 @@ let Map$1 = class Map extends Camera {
             this.painter.terrainFacilitator.dirty = true;
             this._update(true);
         });
+        this.once('idle', () => { this._idleTriggered = true; });
         if (typeof window !== 'undefined') {
             addEventListener('online', this._onWindowOnline, false);
             this._resizeObserver = new ResizeObserver((entries) => {
@@ -54065,11 +53934,14 @@ let Map$1 = class Map extends Camera {
         this._canvas.style.height = `${height}px`;
     }
     _setupPainter() {
-        const attributes = performance.extend({}, supported.webGLContextAttributes, {
+        const attributes = {
+            alpha: true,
+            stencil: true,
+            depth: true,
             failIfMajorPerformanceCaveat: this._failIfMajorPerformanceCaveat,
             preserveDrawingBuffer: this._preserveDrawingBuffer,
             antialias: this._antialias || false
-        });
+        };
         let webglcontextcreationerrorDetailObject = null;
         this._canvas.addEventListener('webglcontextcreationerror', (args) => {
             webglcontextcreationerrorDetailObject = { requestedAttributes: attributes };
@@ -54078,8 +53950,8 @@ let Map$1 = class Map extends Camera {
                 webglcontextcreationerrorDetailObject.type = args.type;
             }
         }, { once: true });
-        const gl = this._canvas.getContext('webgl', attributes) ||
-            this._canvas.getContext('experimental-webgl', attributes);
+        const gl = this._canvas.getContext('webgl2', attributes) ||
+            this._canvas.getContext('webgl', attributes);
         if (!gl) {
             const msg = 'Failed to initialize WebGL';
             if (webglcontextcreationerrorDetailObject) {
@@ -54146,7 +54018,7 @@ let Map$1 = class Map extends Camera {
      * @private
      */
     _update(updateStyle) {
-        if (!this.style)
+        if (!this.style || !this.style._loaded)
             return this;
         this._styleDirty = this._styleDirty || updateStyle;
         this._sourcesDirty = true;
@@ -54179,13 +54051,7 @@ let Map$1 = class Map extends Camera {
      * @private
      */
     _render(paintStartTimeStamp) {
-        let gpuTimer, frameStartTime = 0;
-        const extTimerQuery = this.painter.context.extTimerQuery;
-        if (this.listens('gpu-timing-frame')) {
-            gpuTimer = extTimerQuery.createQueryEXT();
-            extTimerQuery.beginQueryEXT(extTimerQuery.TIME_ELAPSED_EXT, gpuTimer);
-            frameStartTime = performance.exported.now();
-        }
+        const fadeDuration = this._idleTriggered ? this._fadeDuration : 0;
         // A custom layer may have used the context asynchronously. Mark the state as dirty.
         this.painter.context.setDirty();
         this.painter.setBaseState();
@@ -54204,7 +54070,7 @@ let Map$1 = class Map extends Camera {
             this.style.zoomHistory.update(zoom, now);
             const parameters = new performance.EvaluationParameters(zoom, {
                 now,
-                fadeDuration: this._fadeDuration,
+                fadeDuration,
                 zoomHistory: this.style.zoomHistory,
                 transition: this.style.getTransition()
             });
@@ -54234,7 +54100,7 @@ let Map$1 = class Map extends Camera {
         if (this.isMoving()) {
             ImageRequest$1.processQueue();
         }
-        this._placementDirty = this.style && this.style._updatePlacement(this.painter.transform, this.showCollisionBoxes, this._fadeDuration, this._crossSourceCollisions);
+        this._placementDirty = this.style && this.style._updatePlacement(this.painter.transform, this.showCollisionBoxes, fadeDuration, this._crossSourceCollisions);
         // Actually draw
         this.painter.render(this.style, {
             showTileBoundaries: this.showTileBoundaries,
@@ -54242,9 +54108,8 @@ let Map$1 = class Map extends Camera {
             rotating: this.isRotating(),
             zooming: this.isZooming(),
             moving: this.isMoving(),
-            fadeDuration: this._fadeDuration,
+            fadeDuration,
             showPadding: this.showPadding,
-            gpuTiming: !!this.listens('gpu-timing-layer'),
         });
         this.fire(new performance.Event('render'));
         if (this.loaded() && !this._loaded) {
@@ -54260,29 +54125,6 @@ let Map$1 = class Map extends Camera {
             // all tiles held for fading. If we didn't do this, the tiles
             // would just sit in the SourceCaches until the next render
             this.style._releaseSymbolFadeTiles();
-        }
-        if (this.listens('gpu-timing-frame')) {
-            const renderCPUTime = performance.exported.now() - frameStartTime;
-            extTimerQuery.endQueryEXT(extTimerQuery.TIME_ELAPSED_EXT, gpuTimer);
-            setTimeout(() => {
-                const renderGPUTime = extTimerQuery.getQueryObjectEXT(gpuTimer, extTimerQuery.QUERY_RESULT_EXT) / (1000 * 1000);
-                extTimerQuery.deleteQueryEXT(gpuTimer);
-                this.fire(new performance.Event('gpu-timing-frame', {
-                    cpuTime: renderCPUTime,
-                    gpuTime: renderGPUTime
-                }));
-            }, 50); // Wait 50ms to give time for all GPU calls to finish before querying
-        }
-        if (this.listens('gpu-timing-layer')) {
-            // Resetting the Painter's per-layer timing queries here allows us to isolate
-            // the queries to individual frames.
-            const frameLayerQueries = this.painter.collectGpuTimers();
-            setTimeout(() => {
-                const renderedLayerTimes = this.painter.queryGpuTimers(frameLayerQueries);
-                this.fire(new performance.Event('gpu-timing-layer', {
-                    layerTimes: renderedLayerTimes
-                }));
-            }, 50); // Wait 50ms to give time for all GPU calls to finish before querying
         }
         // Schedule another render frame if it's needed.
         //
@@ -55657,11 +55499,12 @@ class GeolocateControl extends performance.Evented {
         }
     }
     _updateCircleRadius() {
-        const y = this._map._container.clientHeight / 2;
-        const a = this._map.unproject([0, y]);
-        const b = this._map.unproject([1, y]);
-        const metersPerPixel = a.distanceTo(b);
-        const circleDiameter = Math.ceil(2.0 * this._accuracy / metersPerPixel);
+        const bounds = this._map.getBounds();
+        const southEastPoint = bounds.getSouthEast();
+        const northEastPoint = bounds.getNorthEast();
+        const mapHeightInMeters = southEastPoint.distanceTo(northEastPoint);
+        const mapHeightInPixels = this._map._container.clientHeight;
+        const circleDiameter = Math.ceil(2 * (this._accuracy / (mapHeightInMeters / mapHeightInPixels)));
         this._circleElement.style.width = `${circleDiameter}px`;
         this._circleElement.style.height = `${circleDiameter}px`;
     }
@@ -56905,7 +56748,6 @@ function normalizeOffset(offset) {
 
 const version = packageJSON.version;
 const exported = {
-    supported,
     setRTLTextPlugin: performance.setRTLTextPlugin,
     getRTLTextPluginStatus: performance.getRTLTextPluginStatus,
     Map: Map$1,
@@ -56975,7 +56817,7 @@ const exported = {
     },
     /**
      * Gets and sets the number of web workers instantiated on a page with GL JS maps.
-     * By default, it is set to half the number of CPU cores (capped at 6).
+     * By default, workerCount is 1 except for Safari browser where it is set to half the number of CPU cores (capped at 3).
      * Make sure to set this property before creating any map instances for it to have effect.
      *
      * @var {string} workerCount
@@ -57066,6 +56908,10 @@ return exported;
 }));
 
 //
+// Our custom intro provides a specialized "define()" function, called by the
+// AMD modules below, that sets up the worker blob URL and then executes the
+// main module, storing its exported value as 'maplibregl'
+
 
 var maplibregl$1 = maplibregl;
 

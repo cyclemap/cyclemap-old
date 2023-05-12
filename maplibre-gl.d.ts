@@ -1141,11 +1141,9 @@ export declare class BindElementBuffer extends BaseValue<WebGLBuffer> {
 	getDefault(): WebGLBuffer;
 	set(v?: WebGLBuffer | null): void;
 }
-export declare class BindVertexArrayOES extends BaseValue<any> {
-	vao: any;
-	constructor(context: Context);
-	getDefault(): any;
-	set(v: any): void;
+export declare class BindVertexArray extends BaseValue<WebGLVertexArrayObject> {
+	getDefault(): WebGLVertexArrayObject | null;
+	set(v: WebGLVertexArrayObject | null): void;
 }
 export declare class PixelStoreUnpack extends BaseValue<number> {
 	getDefault(): number;
@@ -1225,8 +1223,7 @@ export type ClearArgs = {
 	stencil?: number;
 };
 export declare class Context {
-	gl: WebGLRenderingContext;
-	extVertexArrayObject: any;
+	gl: WebGLRenderingContext | WebGL2RenderingContext;
 	currentNumAttributes: number;
 	maxTextureSize: number;
 	clearColor: ClearColor;
@@ -1256,16 +1253,16 @@ export declare class Context {
 	bindTexture: BindTexture;
 	bindVertexBuffer: BindVertexBuffer;
 	bindElementBuffer: BindElementBuffer;
-	bindVertexArrayOES: BindVertexArrayOES;
+	bindVertexArray: BindVertexArray;
 	pixelStoreUnpack: PixelStoreUnpack;
 	pixelStoreUnpackPremultiplyAlpha: PixelStoreUnpackPremultiplyAlpha;
 	pixelStoreUnpackFlipY: PixelStoreUnpackFlipY;
-	extTextureFilterAnisotropic: any;
-	extTextureFilterAnisotropicMax: any;
-	extTextureHalfFloat: any;
-	extRenderToTextureHalfFloat: any;
-	extTimerQuery: any;
-	constructor(gl: WebGLRenderingContext);
+	extTextureFilterAnisotropic: EXT_texture_filter_anisotropic | null;
+	extTextureFilterAnisotropicMax?: GLfloat;
+	HALF_FLOAT?: GLenum;
+	RGBA16F?: GLenum;
+	RGB16F?: GLenum;
+	constructor(gl: WebGLRenderingContext | WebGL2RenderingContext);
 	setDefault(): void;
 	setDirty(): void;
 	createIndexBuffer(array: TriangleIndexArray | LineIndexArray | LineStripIndexArray, dynamicDraw?: boolean): IndexBuffer;
@@ -1277,6 +1274,8 @@ export declare class Context {
 	setDepthMode(depthMode: Readonly<DepthMode>): void;
 	setStencilMode(stencilMode: Readonly<StencilMode>): void;
 	setColorMode(colorMode: Readonly<ColorMode>): void;
+	createVertexArray(): WebGLVertexArrayObject | undefined;
+	deleteVertexArray(x: WebGLVertexArrayObject | undefined): void;
 	unbindVAO(): void;
 }
 export type $ObjMap<T extends {}, F extends (v: any) => any> = {
@@ -3441,7 +3440,6 @@ export type PainterOptions = {
 	rotating: boolean;
 	zooming: boolean;
 	moving: boolean;
-	gpuTiming: boolean;
 	fadeDuration: number;
 };
 export declare class Painter {
@@ -3489,9 +3487,6 @@ export declare class Painter {
 	};
 	crossTileSymbolIndex: CrossTileSymbolIndex;
 	symbolFadeChange: number;
-	gpuTimers: {
-		[_: string]: any;
-	};
 	debugOverlayTexture: Texture;
 	debugOverlayCanvas: HTMLCanvasElement;
 	terrainFacilitator: {
@@ -3499,7 +3494,7 @@ export declare class Painter {
 		matrix: mat4;
 		renderTime: number;
 	};
-	constructor(gl: WebGLRenderingContext, transform: Transform);
+	constructor(gl: WebGLRenderingContext | WebGL2RenderingContext, transform: Transform);
 	resize(width: number, height: number, pixelRatio: number): void;
 	setup(): void;
 	clearStencil(): void;
@@ -3517,14 +3512,6 @@ export declare class Painter {
 	opaquePassEnabledForLayer(): boolean;
 	render(style: Style, options: PainterOptions): void;
 	renderLayer(painter: Painter, sourceCache: SourceCache, layer: StyleLayer, coords: Array<OverscaledTileID>): void;
-	gpuTimingStart(layer: StyleLayer): void;
-	gpuTimingEnd(): void;
-	collectGpuTimers(): {
-		[_: string]: any;
-	};
-	queryGpuTimers(gpuTimers: {
-		[_: string]: any;
-	}): {};
 	/**
 	 * Transform a matrix to incorporate the *-translate and *-translate-anchor properties into it.
 	 * @param inViewportPixelUnitsUnits True when the units accepted by the matrix are in viewport pixels instead of tile units.
@@ -8598,6 +8585,7 @@ export declare class Map extends Camera {
 	_sourcesDirty: boolean;
 	_placementDirty: boolean;
 	_loaded: boolean;
+	_idleTriggered: boolean;
 	_fullyLoaded: boolean;
 	_trackResize: boolean;
 	_resizeObserver: ResizeObserver;
@@ -10884,7 +10872,6 @@ export declare class VideoSource extends ImageSource {
 	hasTransition(): boolean;
 }
 declare const exported: {
-	supported: import("@mapbox/mapbox-gl-supported").IsSupported;
 	setRTLTextPlugin: (url: string, callback: (error?: Error) => void, deferred?: boolean) => void;
 	getRTLTextPluginStatus: () => string;
 	Map: typeof Map;
@@ -10959,7 +10946,7 @@ declare const exported: {
 	readonly version: string;
 	/**
 	 * Gets and sets the number of web workers instantiated on a page with GL JS maps.
-	 * By default, it is set to half the number of CPU cores (capped at 6).
+	 * By default, workerCount is 1 except for Safari browser where it is set to half the number of CPU cores (capped at 3).
 	 * Make sure to set this property before creating any map instances for it to have effect.
 	 *
 	 * @var {string} workerCount
@@ -11023,6 +11010,7 @@ declare const exported: {
 	 */
 	removeProtocol(customProtocol: string): void;
 };
+export type * from "@maplibre/maplibre-gl-style-spec";
 
 export {
 	exported as default,
