@@ -937,32 +937,32 @@ export declare class VertexBuffer {
 	constructor(context: Context, array: StructArray, attributes: ReadonlyArray<StructArrayMember>, dynamicDraw?: boolean);
 	bind(): void;
 	updateData(array: StructArray): void;
-	enableAttributes(gl: WebGLRenderingContext, program: Program<any>): void;
+	enableAttributes(gl: WebGL2RenderingContext, program: Program<any>): void;
 	/**
 	 * Set the attribute pointers in a WebGL context
 	 * @param gl The WebGL context
 	 * @param program The active WebGL program
 	 * @param vertexOffset Index of the starting vertex of the segment
 	 */
-	setVertexAttribPointers(gl: WebGLRenderingContext, program: Program<any>, vertexOffset?: number | null): void;
+	setVertexAttribPointers(gl: WebGL2RenderingContext, program: Program<any>, vertexOffset?: number | null): void;
 	/**
 	 * Destroy the GL buffer bound to the given WebGL context
 	 */
 	destroy(): void;
 }
-export type BlendFuncConstant = WebGLRenderingContext["ZERO"] | WebGLRenderingContext["ONE"] | WebGLRenderingContext["SRC_COLOR"] | WebGLRenderingContext["ONE_MINUS_SRC_COLOR"] | WebGLRenderingContext["DST_COLOR"] | WebGLRenderingContext["ONE_MINUS_DST_COLOR"] | WebGLRenderingContext["SRC_ALPHA"] | WebGLRenderingContext["ONE_MINUS_SRC_ALPHA"] | WebGLRenderingContext["DST_ALPHA"] | WebGLRenderingContext["ONE_MINUS_DST_ALPHA"] | WebGLRenderingContext["CONSTANT_COLOR"] | WebGLRenderingContext["ONE_MINUS_CONSTANT_COLOR"] | WebGLRenderingContext["CONSTANT_ALPHA"] | WebGLRenderingContext["ONE_MINUS_CONSTANT_ALPHA"] | WebGLRenderingContext["BLEND_COLOR"];
+export type BlendFuncConstant = typeof WebGL2RenderingContext.ZERO | typeof WebGL2RenderingContext.ONE | typeof WebGL2RenderingContext.SRC_COLOR | typeof WebGL2RenderingContext.ONE_MINUS_SRC_COLOR | typeof WebGL2RenderingContext.DST_COLOR | typeof WebGL2RenderingContext.ONE_MINUS_DST_COLOR | typeof WebGL2RenderingContext.SRC_ALPHA | typeof WebGL2RenderingContext.ONE_MINUS_SRC_ALPHA | typeof WebGL2RenderingContext.DST_ALPHA | typeof WebGL2RenderingContext.ONE_MINUS_DST_ALPHA | typeof WebGL2RenderingContext.CONSTANT_COLOR | typeof WebGL2RenderingContext.ONE_MINUS_CONSTANT_COLOR | typeof WebGL2RenderingContext.CONSTANT_ALPHA | typeof WebGL2RenderingContext.ONE_MINUS_CONSTANT_ALPHA | typeof WebGL2RenderingContext.BLEND_COLOR;
 export type BlendFuncType = [
 	BlendFuncConstant,
 	BlendFuncConstant
 ];
-export type BlendEquationType = WebGLRenderingContext["FUNC_ADD"] | WebGLRenderingContext["FUNC_SUBTRACT"] | WebGLRenderingContext["FUNC_REVERSE_SUBTRACT"];
+export type BlendEquationType = typeof WebGL2RenderingContext.FUNC_ADD | typeof WebGL2RenderingContext.FUNC_SUBTRACT | typeof WebGL2RenderingContext.FUNC_REVERSE_SUBTRACT;
 export type ColorMaskType = [
 	boolean,
 	boolean,
 	boolean,
 	boolean
 ];
-export type CompareFuncType = WebGLRenderingContext["NEVER"] | WebGLRenderingContext["LESS"] | WebGLRenderingContext["EQUAL"] | WebGLRenderingContext["LEQUAL"] | WebGLRenderingContext["GREATER"] | WebGLRenderingContext["NOTEQUAL"] | WebGLRenderingContext["GEQUAL"] | WebGLRenderingContext["ALWAYS"];
+export type CompareFuncType = typeof WebGL2RenderingContext.NEVER | typeof WebGL2RenderingContext.LESS | typeof WebGL2RenderingContext.EQUAL | typeof WebGL2RenderingContext.LEQUAL | typeof WebGL2RenderingContext.GREATER | typeof WebGL2RenderingContext.NOTEQUAL | typeof WebGL2RenderingContext.GEQUAL | typeof WebGL2RenderingContext.ALWAYS;
 export type DepthMaskType = boolean;
 export type DepthRangeType = [
 	number,
@@ -974,7 +974,7 @@ export type StencilFuncType = {
 	ref: number;
 	mask: number;
 };
-export type StencilOpConstant = WebGLRenderingContext["KEEP"] | WebGLRenderingContext["ZERO"] | WebGLRenderingContext["REPLACE"] | WebGLRenderingContext["INCR"] | WebGLRenderingContext["INCR_WRAP"] | WebGLRenderingContext["DECR"] | WebGLRenderingContext["DECR_WRAP"] | WebGLRenderingContext["INVERT"];
+export type StencilOpConstant = typeof WebGL2RenderingContext.KEEP | typeof WebGL2RenderingContext.ZERO | typeof WebGL2RenderingContext.REPLACE | typeof WebGL2RenderingContext.INCR | typeof WebGL2RenderingContext.INCR_WRAP | typeof WebGL2RenderingContext.DECR | typeof WebGL2RenderingContext.DECR_WRAP | typeof WebGL2RenderingContext.INVERT;
 export type StencilOpType = [
 	StencilOpConstant,
 	StencilOpConstant,
@@ -988,32 +988,32 @@ export type ViewportType = [
 	number
 ];
 export type StencilTestGL = {
-	func: WebGLRenderingContext["NEVER"];
+	func: typeof WebGL2RenderingContext.NEVER;
 	mask: 0;
 } | {
-	func: WebGLRenderingContext["LESS"];
+	func: typeof WebGL2RenderingContext.LESS;
 	mask: number;
 } | {
-	func: WebGLRenderingContext["EQUAL"];
+	func: typeof WebGL2RenderingContext.EQUAL;
 	mask: number;
 } | {
-	func: WebGLRenderingContext["LEQUAL"];
+	func: typeof WebGL2RenderingContext.LEQUAL;
 	mask: number;
 } | {
-	func: WebGLRenderingContext["GREATER"];
+	func: typeof WebGL2RenderingContext.GREATER;
 	mask: number;
 } | {
-	func: WebGLRenderingContext["NOTEQUAL"];
+	func: typeof WebGL2RenderingContext.NOTEQUAL;
 	mask: number;
 } | {
-	func: WebGLRenderingContext["GEQUAL"];
+	func: typeof WebGL2RenderingContext.GEQUAL;
 	mask: number;
 } | {
-	func: WebGLRenderingContext["ALWAYS"];
+	func: typeof WebGL2RenderingContext.ALWAYS;
 	mask: 0;
 };
-export type CullFaceModeType = WebGLRenderingContext["FRONT"] | WebGLRenderingContext["BACK"] | WebGLRenderingContext["FRONT_AND_BACK"];
-export type FrontFaceType = WebGLRenderingContext["CW"] | WebGLRenderingContext["CCW"];
+export type CullFaceModeType = typeof WebGL2RenderingContext.FRONT | typeof WebGL2RenderingContext.BACK | typeof WebGL2RenderingContext.FRONT_AND_BACK;
+export type FrontFaceType = typeof WebGL2RenderingContext.CW | typeof WebGL2RenderingContext.CCW;
 export interface IValue<T> {
 	current: T;
 	default: T;
@@ -1023,7 +1023,7 @@ export interface IValue<T> {
 	set(value: T): void;
 }
 export declare class BaseValue<T> implements IValue<T> {
-	gl: WebGLRenderingContext;
+	gl: WebGL2RenderingContext;
 	current: T;
 	default: T;
 	dirty: boolean;
@@ -1223,7 +1223,7 @@ export type ClearArgs = {
 	stencil?: number;
 };
 export declare class Context {
-	gl: WebGLRenderingContext | WebGL2RenderingContext;
+	gl: WebGL2RenderingContext;
 	currentNumAttributes: number;
 	maxTextureSize: number;
 	clearColor: ClearColor;
@@ -1262,7 +1262,7 @@ export declare class Context {
 	HALF_FLOAT?: GLenum;
 	RGBA16F?: GLenum;
 	RGB16F?: GLenum;
-	constructor(gl: WebGLRenderingContext | WebGL2RenderingContext);
+	constructor(gl: WebGL2RenderingContext);
 	setDefault(): void;
 	setDirty(): void;
 	createIndexBuffer(array: TriangleIndexArray | LineIndexArray | LineStripIndexArray, dynamicDraw?: boolean): IndexBuffer;
@@ -1286,7 +1286,7 @@ export type UniformLocations = {
 	[_: string]: WebGLUniformLocation;
 };
 declare abstract class Uniform<T> {
-	gl: WebGLRenderingContext;
+	gl: WebGL2RenderingContext;
 	location: WebGLUniformLocation;
 	current: T;
 	constructor(context: Context, location: WebGLUniformLocation);
@@ -1474,9 +1474,9 @@ export interface StyleImageInterface {
 	 */
 	onRemove?: () => void;
 }
-export type TextureFormat = WebGLRenderingContext["RGBA"] | WebGLRenderingContext["ALPHA"];
-export type TextureFilter = WebGLRenderingContext["LINEAR"] | WebGLRenderingContext["LINEAR_MIPMAP_NEAREST"] | WebGLRenderingContext["NEAREST"];
-export type TextureWrap = WebGLRenderingContext["REPEAT"] | WebGLRenderingContext["CLAMP_TO_EDGE"] | WebGLRenderingContext["MIRRORED_REPEAT"];
+export type TextureFormat = typeof WebGL2RenderingContext.RGBA | typeof WebGL2RenderingContext.ALPHA;
+export type TextureFilter = typeof WebGL2RenderingContext.LINEAR | typeof WebGL2RenderingContext.LINEAR_MIPMAP_NEAREST | typeof WebGL2RenderingContext.NEAREST;
+export type TextureWrap = typeof WebGL2RenderingContext.REPEAT | typeof WebGL2RenderingContext.CLAMP_TO_EDGE | typeof WebGL2RenderingContext.MIRRORED_REPEAT;
 export type EmptyImage = {
 	width: number;
 	height: number;
@@ -3240,7 +3240,7 @@ export declare class SymbolBucket implements Bucket {
 	sortFeatures(angle: number): void;
 }
 export interface SymbolsByKeyEntry {
-	index?: KDBush<never>;
+	index?: KDBush;
 	positions?: {
 		x: number;
 		y: number;
@@ -3494,7 +3494,7 @@ export declare class Painter {
 		matrix: mat4;
 		renderTime: number;
 	};
-	constructor(gl: WebGLRenderingContext | WebGL2RenderingContext, transform: Transform);
+	constructor(gl: WebGL2RenderingContext, transform: Transform);
 	resize(width: number, height: number, pixelRatio: number): void;
 	setup(): void;
 	clearStencil(): void;
@@ -4273,7 +4273,7 @@ export type TerrainPreludeUniformsType = {
 	"u_terrain_unpack": Uniform4f;
 	"u_terrain_exaggeration": Uniform1f;
 };
-export type DrawMode = WebGLRenderingContext["LINES"] | WebGLRenderingContext["TRIANGLES"] | WebGLRenderingContext["LINE_STRIP"];
+export type DrawMode = typeof WebGL2RenderingContext.LINES | typeof WebGL2RenderingContext.TRIANGLES | typeof WebGL2RenderingContext.LINE_STRIP;
 export declare class Program<Us extends UniformBindings> {
 	program: WebGLProgram;
 	attributes: {
@@ -4829,7 +4829,7 @@ export interface Bucket {
 	 */
 	destroy(): void;
 }
-export type CustomRenderMethod = (gl: WebGLRenderingContext, matrix: mat4) => void;
+export type CustomRenderMethod = (gl: WebGL2RenderingContext, matrix: mat4) => void;
 /**
  * Interface for custom style layers. This is a specification for
  * implementers to model: it is not an exported method or class.
@@ -4928,7 +4928,7 @@ export interface CustomLayerInterface {
 	 * @memberof CustomLayerInterface
 	 * @instance
 	 * @name render
-	 * @param {WebGLRenderingContext} gl The map's gl context.
+	 * @param {WebGL2RenderingContext} gl The map's gl context.
 	 * @param {Array<number>} matrix The map's camera matrix. It projects spherical mercator
 	 * coordinates to gl coordinates. The spherical mercator coordinate `[0, 0]` represents the
 	 * top left corner of the mercator world and `[1, 1]` represents the bottom right corner. When
@@ -4946,7 +4946,7 @@ export interface CustomLayerInterface {
 	 * @memberof CustomLayerInterface
 	 * @instance
 	 * @name prerender
-	 * @param {WebGLRenderingContext} gl The map's gl context.
+	 * @param {WebGL2RenderingContext} gl The map's gl context.
 	 * @param {mat4} matrix The map's camera matrix. It projects spherical mercator
 	 * coordinates to gl coordinates. The mercator coordinate `[0, 0]` represents the
 	 * top left corner of the mercator world and `[1, 1]` represents the bottom right corner. When
@@ -4964,9 +4964,9 @@ export interface CustomLayerInterface {
 	 * @instance
 	 * @name onAdd
 	 * @param {Map} map The Map this custom layer was just added to.
-	 * @param {WebGLRenderingContext} gl The gl context for the map.
+	 * @param {WebGL2RenderingContext} gl The gl context for the map.
 	 */
-	onAdd?(map: Map, gl: WebGLRenderingContext): void;
+	onAdd?(map: Map, gl: WebGL2RenderingContext): void;
 	/**
 	 * Optional method called when the layer has been removed from the Map with {@link Map#removeLayer}. This
 	 * gives the layer a chance to clean up gl resources and event listeners.
@@ -4976,9 +4976,9 @@ export interface CustomLayerInterface {
 	 * @instance
 	 * @name onRemove
 	 * @param {Map} map The Map this custom layer was just added to.
-	 * @param {WebGLRenderingContext} gl The gl context for the map.
+	 * @param {WebGL2RenderingContext} gl The gl context for the map.
 	 */
-	onRemove?(map: Map, gl: WebGLRenderingContext): void;
+	onRemove?(map: Map, gl: WebGL2RenderingContext): void;
 }
 declare abstract class StyleLayer extends Evented {
 	id: string;
